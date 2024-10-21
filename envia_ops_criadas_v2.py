@@ -3,7 +3,6 @@ from banco_dados.conexao import conecta, conecta_robo
 from banco_dados.controle_erros import grava_erro_banco
 import os
 import traceback
-from reportlab.lib.pagesizes import A4
 import inspect
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -12,9 +11,12 @@ from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime, date
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 import fdb
+
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 
 class EnviaOrdensProducao:
@@ -124,7 +126,7 @@ class EnviaOrdensProducao:
             if tabela_estrutura:
                 for i in tabela_estrutura:
                     cod, descr, ref, conj, um, local, qtde, saldo = i
-                    dados = (cod, descr, ref, um, local, qtde, saldo)
+                    dados = (cod, descr, ref, um, qtde, local, saldo)
                     lista_local.append(dados)
 
             return lista_local
@@ -153,6 +155,63 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def teste(self, id_mat_e, lista_substitutos, num_op):
+        try:
+            saldo_substituto = 0
+
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT estprod.id, prod.codigo, prod.descricao "
+                           f"FROM estrutura_produto as estprod "
+                           f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                           f"where estprod.id = {id_mat_e};")
+            sel_estrutura = cursor.fetchall()
+
+            cod_original = sel_estrutura[0][1]
+
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT subs.cod_subs, prod.descricao, COALESCE(prod.obs, '') as obs, "
+                           f"conj.conjunto, prod.unidade, prod.localizacao, prod.quantidade "
+                           f"FROM SUBSTITUTO_MATERIAPRIMA as subs "
+                           f"INNER JOIN produto as prod ON subs.cod_subs = prod.codigo "
+                           f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
+                           f"WHERE subs.id_mat = {id_mat_e} "
+                           f"and prod.quantidade > 0 "
+                           f"AND subs.num_op = {num_op};")
+            dados_mat_com_op = cursor.fetchall()
+            if dados_mat_com_op:
+                cod_subs, descr, ref, conj, um, local, saldo = dados_mat_com_op[0]
+
+                dados = (cod_subs, descr, ref, um, local, saldo, cod_original)
+                lista_substitutos.append(dados)
+
+                saldo_substituto = float(saldo)
+
+            else:
+                cursor = conecta.cursor()
+                cursor.execute(f"SELECT subs.cod_subs, prod.descricao, COALESCE(prod.obs, '') as obs, "
+                               f"conj.conjunto, prod.unidade, prod.localizacao, prod.quantidade "
+                               f"FROM SUBSTITUTO_MATERIAPRIMA as subs "
+                               f"INNER JOIN produto as prod ON subs.cod_subs = prod.codigo "
+                               f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
+                               f"WHERE subs.id_mat = {id_mat_e} "
+                               f"and prod.quantidade > 0 "
+                               f"AND subs.num_op is NULL;")
+                dados_mat_sem_op = cursor.fetchall()
+                if dados_mat_sem_op:
+                    cod_subs, descr, ref, conj, um, local, saldo = dados_mat_sem_op[0]
+
+                    dados = (cod_subs, descr, ref, um, local, saldo, cod_original)
+                    lista_substitutos.append(dados)
+
+                    saldo_substituto = float(saldo)
+
+            return lista_substitutos, saldo_substituto
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
     def consumo_op_por_id(self, num_op, id_materia_prima):
         try:
             cursor = conecta.cursor()
@@ -173,12 +232,20 @@ class EnviaOrdensProducao:
 
     def verifica_ops_concluidas(self):
         try:
+            lista_substitutos = []
+
             select_estrut = self.estrutura_prod_qtde_op(self.num_op, self.id_estrut)
 
             todos_materiais_consumidos = True
 
             for dados_estrut in select_estrut:
+                saldo_final = 0
+
                 id_mat_e, cod_e, descr_e, ref_e, um_e, qtde_e, saldo_prod_e = dados_estrut
+
+                lista_substitutos, saldo_subs = self.teste(id_mat_e, lista_substitutos, self.num_op)
+
+                saldo_final += saldo_subs + float(saldo_prod_e)
 
                 select_os = self.consumo_op_por_id(self.num_op, id_mat_e)
                 if select_os:
@@ -187,14 +254,15 @@ class EnviaOrdensProducao:
 
                         if qtde_mat_os < qtde_e:
                             sobras = qtde_e - qtde_mat_os
-                            if sobras > saldo_prod_e:
+                            if sobras < saldo_final:
                                 todos_materiais_consumidos = False
                                 break
                 else:
-                    if saldo_prod_e < qtde_e:
+                    if saldo_final < qtde_e:
                         todos_materiais_consumidos = False
+                        break
 
-            return todos_materiais_consumidos
+            return todos_materiais_consumidos, lista_substitutos
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -502,7 +570,7 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def gerar_pdf_listagem_separar(self, caminho_listagem):
+    def gerar_pdf_listagem_separar(self, caminho_listagem, lista_subs):
         try:
             lista_estrutura = self.listagem_material_estrutura(self.cod_prod, self.qtde_produto)
 
@@ -523,12 +591,22 @@ class EnviaOrdensProducao:
             cabecalho_op = ['Nº OP', 'CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE']
             elementos_op = self.adicionar_tabelas_listagem(dados_op, cabecalho_op)
 
-            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'QTDE', 'SALDO']
+            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE', 'LOCALIZAÇÃO', 'SALDO']
             elementos_lista = self.adicionar_tabelas_listagem(lista_estrutura, cabecalho_lista)
 
             espaco_em_branco = Table([[None]], style=[('SIZE', (0, 0), (0, 0), 20)])
 
-            elementos = elementos_op + [espaco_em_branco] + elementos_lista
+            if lista_subs:
+                styles = getSampleStyleSheet()
+                estilo_centralizado = ParagraphStyle(name='Centralizado', parent=styles['Heading2'], alignment=1)
+                texto_substituicoes = Paragraph("Lista de Opções para Substituição", estilo_centralizado)
+
+                cabecalho_subs = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'SALDO', 'CÓD. ORIGINAL']
+                elementos_subs = self.adicionar_tabelas_listagem(lista_subs, cabecalho_subs)
+                elementos = elementos_op + [espaco_em_branco] + elementos_lista + \
+                            [espaco_em_branco, texto_substituicoes, espaco_em_branco] + elementos_subs
+            else:
+                elementos = elementos_op + [espaco_em_branco] + elementos_lista
 
             doc.build(elementos)
 
@@ -635,25 +713,33 @@ class EnviaOrdensProducao:
                                 foi_salvo_banco = self.verifica_banco()
 
                                 if not foi_salvo_banco:
-                                    todo_material_consumido = self.verifica_ops_concluidas()
+                                    todo_material_consumido, lista_subs = self.verifica_ops_concluidas()
 
                                     if todo_material_consumido:
+                                        diretorio_destino = r'\\publico\C\OP\Aguardando Material/'
+                                        arquivo_listagem = f'Listagem - OP {self.num_op}.pdf'
+                                        caminho_listagem = os.path.join(diretorio_destino, arquivo_listagem)
+
                                         if self.tipo == "87":
                                             print("CONJUNTO")
-                                            diretorio_destino = r'\\publico\C\OP\Aguardando Material/'
-                                            arquivo_listagem = f'Listagem - OP {self.num_op}.pdf'
-                                            caminho_listagem = os.path.join(diretorio_destino, arquivo_listagem)
-
-                                            self.gerar_pdf_listagem_separar(caminho_listagem)
+                                            self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
                                             self.inserir_no_banco()
                                             self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
                                             self.excluir_arquivo(self.caminho_original)
                                             self.excluir_arquivo(caminho_listagem)
                                         else:
-                                            print("USINAGEM")
-                                            self.inserir_no_banco()
-                                            self.envia_email_usinagem()
-                                            self.excluir_arquivo(self.caminho_original)
+                                            if lista_subs:
+                                                print("USINAGEM COM SUBSTITUTO")
+                                                self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
+                                                self.inserir_no_banco()
+                                                self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
+                                                self.excluir_arquivo(self.caminho_original)
+                                                self.excluir_arquivo(caminho_listagem)
+                                            else:
+                                                print("USINAGEM")
+                                                self.inserir_no_banco()
+                                                self.envia_email_usinagem()
+                                                self.excluir_arquivo(self.caminho_original)
 
                     except fdb.DatabaseError:
                         print("aaaaaaaaaaaa")
