@@ -254,7 +254,7 @@ class EnviaOrdensProducao:
 
                         if qtde_mat_os < qtde_e:
                             sobras = qtde_e - qtde_mat_os
-                            if sobras < saldo_final:
+                            if sobras > saldo_final:
                                 todos_materiais_consumidos = False
                                 break
                 else:

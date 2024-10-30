@@ -71,7 +71,7 @@ class EnviaMovimentacao:
 
             email_user = 'ti.ahcmaq@gmail.com'
 
-            to = ['<maquinas@unisold.com.br>']
+            to = ['<maquinas@unisold.com.br>', '<estoque@acinplas.com.br>', 'fat_maq@unisold.com.br']
 
             password = 'poswxhqkeaacblku'
 
