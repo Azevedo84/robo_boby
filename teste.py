@@ -1,668 +1,308 @@
 import sys
-from banco_dados.conexao import conecta, conecta_robo
+from banco_dados.conexao import conecta
 from banco_dados.controle_erros import grava_erro_banco
-import os
-import traceback
-from reportlab.lib.pagesizes import A4
+from comandos.conversores import valores_para_float
+from datetime import timedelta, date, datetime
 import inspect
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email.header import Header
-from email import encoders
-from datetime import datetime, date
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import fdb
+import os
+import math
+import traceback
+
+from comandos.excel import edita_alinhamento, edita_bordas, edita_preenchimento
+from comandos.excel import edita_fonte, criar_workbook, letra_coluna
+from pathlib import Path
+
+import pandas as pd
 
 
-class EnviaOrdensProducao:
+class PcpPrevisao:
     def __init__(self):
-        self.erros = ""
+        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
+        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
 
-        self.caminho_original = ""
-        self.arq_original = ""
-        self.num_desenho_arq = ""
-        self.qtde_produto = 0
-        self.id_prod = ""
-        self.cod_prod = ""
-        self.descr_prod = ""
-        self.ref_prod = ""
-        self.um_prod = ""
-        self.num_op = ""
-        self.tipo = ""
+        data_inicio = date.today() + timedelta(1)
+        dia_da_semana = data_inicio.weekday()
+        if dia_da_semana == 5:
+            data_ini = date.today() + timedelta(3)
+        elif dia_da_semana == 6:
+            data_ini = date.today() + timedelta(2)
+        else:
+            data_ini = date.today() + timedelta(1)
 
-    def dados_email(self):
+        self.date_Inicio = data_ini
+        self.line_Func = "5"
+        self.line_HorasDia = "8"
+        self.line_SemanCompra = "1"
+
+        self.manipula_dados_pi()
+
+    def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
-            to = ['<maquinas@unisold.com.br>']
+            tb = traceback.extract_tb(excecao)
+            num_linha_erro = tb[-1][1]
 
-            current_time = (datetime.now())
-            horario = current_time.strftime('%H')
-            hora_int = int(horario)
-            saudacao = ""
-            if 4 < hora_int < 13:
-                saudacao = "Bom Dia!"
-            elif 12 < hora_int < 19:
-                saudacao = "Boa Tarde!"
-            elif hora_int > 18:
-                saudacao = "Boa Noite!"
-            elif hora_int < 5:
-                saudacao = "Boa Noite!"
+            traceback.print_exc()
+            print(f'Houve um problema no arquivo: {arquivo} na função: "{nome_funcao}"\n{mensagem} {num_linha_erro}')
+            print(f'Houve um problema no arquivo:\n\n{arquivo}\n\n'
+                  f'Comunique o desenvolvedor sobre o problema descrito abaixo:\n\n'
+                  f'{nome_funcao}: {mensagem}')
 
-            msg_final = f"Att,\n" \
-                        f"Suzuki Máquinas Ltda\n" \
-                        f"Fone (51) 3561.2583/(51) 3170.0965\n\n" \
-                        f"Mensagem enviada automaticamente, por favor não responda.\n\n" \
-                        f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
-                        f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
-
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            nome_funcao_trat = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            tb = traceback.extract_tb(exc_traceback)
+            num_linha_erro = tb[-1][1]
+            print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
+                  f'{e} {num_linha_erro}')
+            grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
 
-    def excluir_arquivo(self, caminho_arquivo):
+    def retorna_calculo_meses(self, dados_tabela):
         try:
-            if os.path.exists(caminho_arquivo):
-                os.remove(caminho_arquivo)
-            else:
-                print("O arquivo não existe no caminho especificado.")
+            tab_prev = []
+            for datas in dados_tabela:
+                cod_prev = datas[1]
+                dt_previsao = datas[6]
+                data_obj = datetime.strptime(dt_previsao, "%d/%m/%Y").date()
+                cc = (cod_prev, data_obj)
+                tab_prev.append(cc)
 
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            tab_ordenada = sorted(tab_prev, key=lambda x: x[1])
 
-    def listagem_material_estrutura(self, cod_prod, qtde):
-        try:
-            lista_local = []
+            data_mais_alta = max(tab_ordenada, key=lambda x: x[1])
 
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT id, codigo FROM produto where codigo = {cod_prod};")
-            select_prod = cursor.fetchall()
+            tab_meses = []
+            for item in tab_ordenada:
+                cod_isso = item[0]
+                data = item[1]
+                diferenca = (data - data_mais_alta[1]).days
 
-            idez, cod = select_prod[0]
-
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT mat.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
-                           f"conj.conjunto, prod.unidade, prod.localizacao, "
-                           f"(mat.quantidade * {qtde}) as qtde, "
-                           f"prod.quantidade "
-                           f"from materiaprima as mat "
-                           f"INNER JOIN produto prod ON mat.codigo = prod.codigo "
-                           f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
-                           f"where mat.mestre = {idez} order by conj.conjunto DESC, prod.descricao ASC;")
-            tabela_estrutura = cursor.fetchall()
-
-            if tabela_estrutura:
-                for i in tabela_estrutura:
-                    cod, descr, ref, conj, um, local, qtde, saldo = i
-                    dados = (cod, descr, ref, um, qtde, local, saldo)
-                    lista_local.append(dados)
-
-            return lista_local
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def estrutura_prod_qtde_op(self, num_op, id_produto):
-        try:
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT mat.id, prod.codigo, prod.descricao, "
-                           f"COALESCE(prod.obs, '') as obs, prod.unidade, "
-                           f"((SELECT quantidade FROM ordemservico where numero = {num_op}) * "
-                           f"(mat.quantidade)) AS Qtde, prod.quantidade "
-                           f"FROM materiaprima as mat "
-                           f"INNER JOIN produto as prod ON mat.produto = prod.id "
-                           f"where mat.mestre = {id_produto} ORDER BY prod.descricao;")
-            sel_estrutura = cursor.fetchall()
-
-            return sel_estrutura
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def consumo_op_por_id(self, num_op, id_materia_prima):
-        try:
-            cursor = conecta.cursor()
-            cursor.execute(f"select prodser.id_materia, prodser.data, prod.codigo, prod.descricao, "
-                           f"COALESCE(prod.obs, '') as obs, prod.unidade, "
-                           f"prodser.quantidade, prodser.qtde_materia "
-                           f"from produtoos as prodser "
-                           f"INNER JOIN produto as prod ON prodser.produto = prod.id "
-                           f"where prodser.numero = {num_op} and prodser.id_materia = {id_materia_prima};")
-            consumo_os = cursor.fetchall()
-
-            return consumo_os
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def teste(self, id_mat_e, lista_substitutos, num_op):
-        try:
-            saldo_substituto = 0
-
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT mat.id, prod.codigo, prod.descricao "
-                           f"FROM materiaprima as mat "
-                           f"INNER JOIN produto as prod ON mat.produto = prod.id "
-                           f"where mat.id = {id_mat_e};")
-            sel_estrutura = cursor.fetchall()
-
-            cod_original = sel_estrutura[0][1]
-
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT subs.cod_subs, prod.descricao, COALESCE(prod.obs, '') as obs, "
-                           f"conj.conjunto, prod.unidade, prod.localizacao, prod.quantidade "
-                           f"FROM SUBSTITUTO_MATERIAPRIMA as subs "
-                           f"INNER JOIN produto as prod ON subs.cod_subs = prod.codigo "
-                           f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
-                           f"WHERE subs.id_mat = {id_mat_e} "
-                           f"and prod.quantidade > 0 "
-                           f"AND subs.num_op = {num_op};")
-            dados_mat_com_op = cursor.fetchall()
-            print("com op", dados_mat_com_op)
-            if dados_mat_com_op:
-                cod_subs, descr, ref, conj, um, local, saldo = dados_mat_com_op[0]
-
-                dados = (cod_subs, descr, ref, um, local, saldo, cod_original)
-                lista_substitutos.append(dados)
-
-                saldo_substituto = float(saldo)
-
-            else:
-                cursor = conecta.cursor()
-                cursor.execute(f"SELECT subs.cod_subs, prod.descricao, COALESCE(prod.obs, '') as obs, "
-                               f"conj.conjunto, prod.unidade, prod.localizacao, prod.quantidade "
-                               f"FROM SUBSTITUTO_MATERIAPRIMA as subs "
-                               f"INNER JOIN produto as prod ON subs.cod_subs = prod.codigo "
-                               f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
-                               f"WHERE subs.id_mat = {id_mat_e} "
-                               f"and prod.quantidade > 0 "
-                               f"AND subs.num_op is NULL;")
-                dados_mat_sem_op = cursor.fetchall()
-                print("sem op", dados_mat_sem_op)
-                if dados_mat_sem_op:
-                    cod_subs, descr, ref, conj, um, local, saldo = dados_mat_sem_op[0]
-
-                    dados = (cod_subs, descr, ref, um, local, saldo, cod_original)
-                    lista_substitutos.append(dados)
-
-                    saldo_substituto = float(saldo)
-
-            return lista_substitutos, saldo_substituto
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def verifica_ops_concluidas(self):
-        try:
-            lista_substitutos = []
-
-            select_estrut = self.estrutura_prod_qtde_op(self.num_op, self.id_prod)
-
-            todos_materiais_consumidos = True
-
-            for dados_estrut in select_estrut:
-                saldo_final = 0
-
-                id_mat_e, cod_e, descr_e, ref_e, um_e, qtde_e, saldo_prod_e = dados_estrut
-
-                print("estrutura", cod_e, descr_e, ref_e, um_e, qtde_e, saldo_prod_e)
-
-                lista_substitutos, saldo_subs = self.teste(id_mat_e, lista_substitutos, self.num_op)
-
-                saldo_final += saldo_subs + float(saldo_prod_e)
-
-                select_os = self.consumo_op_por_id(self.num_op, id_mat_e)
-                if select_os:
-                    for dados_os in select_os:
-                        id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
-
-                        if qtde_mat_os < qtde_e:
-                            sobras = qtde_e - qtde_mat_os
-                            if sobras < saldo_final:
-                                print("        qtde_mat_os < qtde_e:", qtde_mat_os, qtde_e, sobras, saldo_final)
-                                todos_materiais_consumidos = False
-                                break
+                if diferenca < 0:
+                    diferenca1 = diferenca * -1
                 else:
-                    if saldo_final < qtde_e:
-                        print("       if saldo_final < qtde_e:", saldo_final, qtde_e)
-                        todos_materiais_consumidos = False
-                        break
+                    diferenca1 = 0
 
-            return todos_materiais_consumidos, lista_substitutos
+                meses = diferenca1 / 30 if diferenca1 != 0 else 0
 
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+                meses_arredondados = math.ceil(meses)
 
-    def envia_email(self, caminho_listagem, arquivo_listagem):
-        try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+                dd = (cod_isso, meses_arredondados)
+                tab_meses.append(dd)
 
-            to = ['<maquinas@unisold.com.br>']
-
-            subject = f'OP - Separar material OP {self.num_op}'
-
-            msg = MIMEMultipart()
-            msg['From'] = email_user
-            msg['Subject'] = subject
-
-            body = f"{saudacao}\n\n" \
-                   f"A Ordem de Produção Nº {self.num_op} está com todo material em estoque para ser separado.\n\n" \
-                   f"{msg_final}"
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            attachment1 = open(self.caminho_original, 'rb')
-            part1 = MIMEBase('application', "octet-stream")
-            part1.set_payload(attachment1.read())
-            encoders.encode_base64(part1)
-            part1.add_header('Content-Disposition', 'attachment', filename=Header(self.arq_original, 'utf-8').encode())
-            msg.attach(part1)
-            attachment1.close()
-
-            attachment2 = open(caminho_listagem, 'rb')
-            part2 = MIMEBase('application', "octet-stream")
-            part2.set_payload(attachment2.read())
-            encoders.encode_base64(part2)
-            part2.add_header('Content-Disposition', 'attachment', filename=Header(arquivo_listagem, 'utf-8').encode())
-            msg.attach(part2)
-            attachment2.close()
-
-            text = msg.as_string()
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_user, password)
-
-            server.sendmail(email_user, to, text)
-
-            server.quit()
-
-            print(f'OP {self.num_op} enviada com sucesso!')
+            return tab_meses
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def envia_email_nao_acha_op(self):
+    def definir_folgas(self, data_inicio, data_fim):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            contagem_sabados = 0
+            contagem_domingos = 0
 
-            subject = f'OP - Não foi encontrado o número da OP'
+            data_atual = data_inicio
+            while data_atual <= data_fim:
+                if data_atual.weekday() == 5:
+                    contagem_sabados += 1
+                elif data_atual.weekday() == 6:
+                    contagem_domingos += 1
 
-            msg = MIMEMultipart()
-            msg['From'] = email_user
-            msg['Subject'] = subject
+                data_atual += timedelta(days=1)
 
-            body = f'{saudacao}\n\n' \
-                   f'Houve algum problema com o arquivo "{self.arq_original}".\n\n' \
-                   f'{msg_final}'
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-
-            caminho_arquivo = os.path.join(diretorio_atual, self.caminho_original)
-
-            attachment = open(caminho_arquivo, 'rb')
-
-            part = MIMEBase('application', "octet-stream")
-            part.set_payload(attachment.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', 'attachment', filename=Header(self.arq_original, 'utf-8').encode())
-            msg.attach(part)
-
-            text = msg.as_string()
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_user, password)
-
-            server.sendmail(email_user, to, text)
-            attachment.close()
-
-            server.quit()
-
-            print(f'envia_email_nao_acha_op enviado com sucesso!')
+            return contagem_sabados, contagem_domingos
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def envia_email_op_nao_existe(self):
+    def retorna_data_entrega(self, id_pais):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            tempos_de_entrega = []
+            fornecedor = ''
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT oc.data, oc.numero, prodoc.produto, prodoc.quantidade, mov.data, forn.razao "
+                           f"FROM produtoordemcompra as prodoc "
+                           f"INNER JOIN entradaprod as ent ON prodoc.mestre = ent.ordemcompra "
+                           f"INNER JOIN movimentacao as mov ON ent.movimentacao = mov.id "
+                           f"INNER JOIN fornecedores as forn ON ent.fornecedor = forn.id "
+                           f"INNER JOIN ordemcompra as oc ON prodoc.mestre = oc.id "
+                           f"WHERE prodoc.produto = '{id_pais}' and oc.entradasaida = 'E';")
+            extrair_prod = cursor.fetchall()
 
-            subject = f'OP - A OP {self.num_op} não existe!'
+            if extrair_prod:
+                for registro in extrair_prod:
+                    data_emissao = registro[0]
+                    data_entrega = registro[4]
+                    fornecedor = registro[5]
 
-            msg = MIMEMultipart()
-            msg['From'] = email_user
-            msg['Subject'] = subject
-
-            body = f'{saudacao}\n\n' \
-                   f'Houve algum problema com o arquivo "{self.arq_original}", pois esta OP não existe!\n\n' \
-                   f'{msg_final}'
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            attachment = open(self.caminho_original, 'rb')
-
-            part = MIMEBase('application', "octet-stream")
-            part.set_payload(attachment.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', 'attachment',
-                            filename=Header(self.arq_original, 'utf-8').encode())
-            msg.attach(part)
-
-            text = msg.as_string()
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_user, password)
-
-            server.sendmail(email_user, to, text)
-            attachment.close()
-
-            server.quit()
-
-            print(f'envia_email_op_nao_existe enviado com sucesso!')
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def envia_email_op_encerrada(self):
-        try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
-
-            subject = f'OP - A OP {self.num_op} já foi encerrada!'
-
-            msg = MIMEMultipart()
-            msg['From'] = email_user
-            msg['Subject'] = subject
-
-            body = f'{saudacao}\n\n' \
-                   f'Houve algum problema com o arquivo "{self.arq_original}", pois esta OP já foi encerrada!\n\n' \
-                   f'{msg_final}'
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            attachment = open(self.caminho_original, 'rb')
-
-            part = MIMEBase('application', "octet-stream")
-            part.set_payload(attachment.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', 'attachment',
-                            filename=Header(self.arq_original, 'utf-8').encode())
-            msg.attach(part)
-
-            text = msg.as_string()
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_user, password)
-
-            server.sendmail(email_user, to, text)
-            attachment.close()
-
-            server.quit()
-
-            print(f'envia_email_op_encerrada enviado com sucesso!')
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def envia_email_numeros_duplicados(self):
-        try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
-
-            subject = f'OP - Arquivos Duplicados na pasta "OP"'
-
-            msg = MIMEMultipart()
-            msg['From'] = email_user
-            msg['Subject'] = subject
-
-            body = f'{saudacao}\n\n' \
-                   f'Favor verificar os arquivos da pasta "OP" no servidor (PUBLICO). Pois foi encontrado ' \
-                   f'itens semelhantes.\n\n' \
-                   f'{msg_final}'
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            text = msg.as_string()
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_user, password)
-
-            server.sendmail(email_user, to, text)
-
-            server.quit()
-
-            print(f'envia_email_numeros_duplicados enviado com sucesso!')
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def inserir_no_banco(self):
-        try:
-            data_hoje = date.today()
-
-            """
-            cursor = conecta_robo.cursor()
-            cursor.execute(f"Insert into ENVIA_OPS_PRONTAS (ID, NUM_OP, COD_PRODUTO, DATA_ENTREGA) "
-                           f"values (GEN_ID(GEN_ENVIA_OPS_PRONTAS_ID,1), {self.num_op}, {self.cod_prod}, "
-                           f"'{data_hoje}');")
-
-            conecta_robo.commit()
-            """
-
-            print(f"OP {self.num_op} salvo no banco com sucesso!")
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def adicionar_tabelas_listagem(self, dados, cabecalho):
-        try:
-            elements = []
-
-            style_lista = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.gray),
-                                      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                      ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                                      ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                                      ('FONTSIZE', (0, 0), (-1, 0), 10),
-                                      ('FONTSIZE', (0, 1), (-1, -1), 8)])
-
-            table = Table([cabecalho] + dados)
-            table.setStyle(style_lista)
-            elements.append(table)
-
-            return elements
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
-
-    def gerar_pdf_listagem_separar(self, caminho_listagem, lista_subs):
-        try:
-            lista_estrutura = self.listagem_material_estrutura(self.cod_prod, self.qtde_produto)
-
-            dados_op = [(self.num_op, self.cod_prod, self.descr_prod, self.ref_prod,
-                         self.um_prod, self.qtde_produto)]
-
-            margem_esquerda = 0
-            margem_direita = 5
-            margem_superior = 25
-            margem_inferior = 5
-
-            doc = SimpleDocTemplate(caminho_listagem, pagesize=A4,
-                                    leftMargin=margem_esquerda,
-                                    rightMargin=margem_direita,
-                                    topMargin=margem_superior,
-                                    bottomMargin=margem_inferior)
-
-            cabecalho_op = ['Nº OP', 'CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE']
-            elementos_op = self.adicionar_tabelas_listagem(dados_op, cabecalho_op)
-
-            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE', 'LOCALIZAÇÃO', 'SALDO']
-            elementos_lista = self.adicionar_tabelas_listagem(lista_estrutura, cabecalho_lista)
-
-            espaco_em_branco = Table([[None]], style=[('SIZE', (0, 0), (0, 0), 20)])
-
-            if lista_subs:
-                styles = getSampleStyleSheet()
-                estilo_centralizado = ParagraphStyle(name='Centralizado', parent=styles['Heading2'], alignment=1)
-                texto_substituicoes = Paragraph("Lista de Opções para Substituição", estilo_centralizado)
-
-                cabecalho_subs = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'SALDO', 'CÓD. ORIGINAL']
-                elementos_subs = self.adicionar_tabelas_listagem(lista_subs, cabecalho_subs)
-                elementos = elementos_op + [espaco_em_branco] + elementos_lista + \
-                            [espaco_em_branco, texto_substituicoes, espaco_em_branco] + elementos_subs
+                    tempo_entrega_dias = (data_entrega - data_emissao).days
+                    tempos_de_entrega.append(tempo_entrega_dias)
+            if tempos_de_entrega:
+                media_entrega = sum(tempos_de_entrega) / len(tempos_de_entrega)
             else:
-                elementos = elementos_op + [espaco_em_branco] + elementos_lista
+                media_entrega = 0
 
-            doc.build(elementos)
+            entrega = int(media_entrega)
+
+            return entrega, fornecedor
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def verifica_banco(self):
+    def manipula_dados_tabela_producao(self, cod_prod):
         try:
-            cursor = conecta_robo.cursor()
-            cursor.execute(f"SELECT * FROM envia_ops_prontas where num_op = {self.num_op};")
-            select_envio = cursor.fetchall()
+            dados_ops = []
+            cursor = conecta.cursor()
+            cursor.execute(f"select ordser.datainicial, ordser.dataprevisao, ordser.numero, prod.codigo, "
+                           f"prod.descricao, "
+                           f"COALESCE(prod.obs, '') as obs, prod.unidade, "
+                           f"ordser.quantidade "
+                           f"from ordemservico as ordser "
+                           f"INNER JOIN produto prod ON ordser.produto = prod.id "
+                           f"where ordser.status = 'A' and prod.codigo = {cod_prod} "
+                           f"order by ordser.numero;")
+            op_abertas = cursor.fetchall()
+            if op_abertas:
+                for dados_op in op_abertas:
+                    emissao, previsao, op, cod, descr, ref, um, qtde = dados_op
 
-            return select_envio
+                    dados = (op, qtde)
+                    dados_ops.append(dados)
+
+            return dados_ops
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def procura_arquivos(self):
+    def manipula_dados_pi(self):
         try:
-            caminho = 'C:/OP/Aguardando Material/'
-            extensao = ".pdf"
+            dados_p_tabela = []
+            tabela_final = []
 
-            arquivos_pdfs = []
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT prodint.id_pedidointerno, prod.codigo, prod.descricao, "
+                           f"COALESCE(prod.obs, '') as obs, "
+                           f"prod.unidade, prodint.qtde, prodint.data_previsao "
+                           f"FROM PRODUTOPEDIDOINTERNO as prodint "
+                           f"INNER JOIN produto as prod ON prodint.id_produto = prod.id "
+                           f"INNER JOIN pedidointerno as ped ON prodint.id_pedidointerno = ped.id "
+                           f"INNER JOIN clientes as cli ON ped.id_cliente = cli.id "
+                           f"where prodint.status = 'A';")
+            dados_interno = cursor.fetchall()
+            if dados_interno:
+                for i in dados_interno:
+                    num_pi, cod, descr, ref, um, qtde, entrega = i
 
-            for arquivo in os.listdir(caminho):
-                if arquivo.endswith(extensao):
-                    caminho_arquivo = os.path.join(caminho, arquivo)
-                    arquivos_pdfs.append(caminho_arquivo)
+                    dados = (num_pi, cod, descr, ref, um, qtde, entrega, "", "")
 
-            return arquivos_pdfs
+                    dados_p_tabela.append(dados)
+
+                tab_ordenada = sorted(dados_p_tabela, key=lambda x: x[6])
+
+                for ii in tab_ordenada:
+                    num_pis, cods, des, refs, um, qti, pr, niv, calc = ii
+
+                    prev = pr.strftime('%d/%m/%Y')
+
+                    coco = (num_pis, cods, des, refs, um, qti, prev, niv, calc)
+                    tabela_final.append(coco)
+
+            return tabela_final
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, e, self.erros)
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def manipula_comeco(self):
+    def calculo_1_dados_previsao(self):
         try:
-            arquivos_pdf = self.procura_arquivos()
+            cod_maquina = "20707"
+            qtde = 1
+            nivel = 1
 
-            numeros_op_processados = []
-            duplicados = []
+            estrutura = self.calculo_3_verifica_estrutura(nivel, cod_maquina, qtde)
 
-            for arq_original in arquivos_pdf:
-                dadinhos = arq_original[26:]
-
-                inicio = dadinhos.find("OP ")
-                dadinhos1 = dadinhos[inicio + 3:]
-
-                ini = dadinhos1.find(" - ")
-                num_op = dadinhos1[:ini]
-
-                if num_op in numeros_op_processados:
-                    duplicados.append(num_op)
-                else:
-                    numeros_op_processados.append(num_op)
-
-            if not duplicados:
-                for arq_original in arquivos_pdf:
-                    self.caminho_original = arq_original
-
-                    self.arq_original = arq_original[26:]
-
-                    inicio = self.arq_original.find("OP ")
-                    dadinhos1 = self.arq_original[inicio + 3:]
-
-                    ini = dadinhos1.find(" - ")
-                    self.num_op = dadinhos1[:ini]
-                    print("num op:", self.num_op)
-
-                    try:
-                        cursor = conecta.cursor()
-                        cursor.execute(f"SELECT numero, datainicial, status, produto, quantidade "
-                                       f"FROM ordemservico where numero = {self.num_op};")
-                        extrair_dados = cursor.fetchall()
-                        if not extrair_dados:
-                            self.envia_email_op_nao_existe()
-                        else:
-                            cursor = conecta.cursor()
-                            cursor.execute(f"SELECT op.numero, op.codigo, op.produto, prod.descricao, "
-                                           f"COALESCE(prod.obs, ''), "
-                                           f"prod.unidade, COALESCE(prod.tipomaterial, ''), op.quantidade "
-                                           f"FROM ordemservico as op "
-                                           f"INNER JOIN produto as prod ON op.produto = prod.id "
-                                           f"where op.numero = {self.num_op} "
-                                           f"AND op.status = 'A';")
-                            select_status = cursor.fetchall()
-
-                            if not select_status:
-                                self.envia_email_op_encerrada()
-                            else:
-                                self.id_prod = select_status[0][2]
-                                self.cod_prod = select_status[0][1]
-                                self.descr_prod = select_status[0][3]
-                                self.ref_prod = select_status[0][4]
-                                self.um_prod = select_status[0][5]
-                                self.qtde_produto = select_status[0][7]
-                                self.tipo = select_status[0][6]
-
-                                foi_salvo_banco = self.verifica_banco()
-
-                                if not foi_salvo_banco:
-                                    todo_material_consumido, lista_subs = self.verifica_ops_concluidas()
-                                    if self.num_op == "7119":
-                                        print(todo_material_consumido)
-
-                                    if todo_material_consumido:
-                                        diretorio_destino = 'C:/OP/Aguardando Material/'
-
-                                        arquivo_listagem = f'Listagem - OP {self.num_op}.pdf'
-                                        caminho_listagem = os.path.join(diretorio_destino, arquivo_listagem)
-
-                                        self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
-
-                                        self.inserir_no_banco()
-                                        self.envia_email(caminho_listagem, arquivo_listagem)
-                                        # self.excluir_arquivo(self.caminho_original)
-                                        self.excluir_arquivo(caminho_listagem)
-
-                    except fdb.DatabaseError:
-                        self.envia_email_nao_acha_op()
-
-            else:
-                print("duplicados", duplicados)
-                self.envia_email_numeros_duplicados()
+            if estrutura:
+                self.exportar_para_excel(estrutura)
+                for i in estrutura:
+                    print(i)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
-            print(nome_funcao, type(e).__name__, e, self.erros)
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def calculo_3_verifica_estrutura(self, nivel, codigo, quantidade):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT prod.id, prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
+                           f"prod.unidade, prod.quantidade, tip.tipomaterial, prod.id_versao "
+                           f"FROM produto as prod "
+                           f"LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id "
+                           f"WHERE prod.codigo = '{codigo}';")
+            detalhes_pai = cursor.fetchall()
+
+            if not detalhes_pai:
+                raise Exception(f"Produto com código {codigo} não encontrado.")
+
+            id_pai, cod_pai, descr_pai, ref_pai, um_pai, saldo, tipo, id_estrut = detalhes_pai[0]
+
+            dadoss = (nivel, cod_pai, descr_pai, ref_pai, um_pai, quantidade)
+            filhos = [dadoss]
+
+            if id_estrut:
+                nivel_plus = nivel + 1
+
+                cursor.execute(
+                    f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, prod.unidade, "
+                    f"(estprod.quantidade * {quantidade}) as qtde "
+                    f"FROM estrutura_produto as estprod "
+                    f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                    f"WHERE estprod.id_estrutura = {id_estrut};")
+                dados_estrutura = cursor.fetchall()
+                if dados_estrutura:
+                    for prod in dados_estrutura:
+                        cod_f, descr_f, ref_f, um_f, qtde_f = prod
+
+                        filhos.extend(self.calculo_3_verifica_estrutura(nivel_plus, cod_f, qtde_f))
+
+            return filhos
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def exportar_para_excel(self, estrutura):
+        df = pd.DataFrame(estrutura, columns=['Nível', 'Código', 'Descrição', 'Referência', 'Unidade', 'Quantidade'])
+
+        # Função para deslocar os dados com base no nível
+        def deslocar_dados(row):
+            nivel = row['Nível']
+            deslocamento = (nivel - 1) * 6  # Cada nível desloca 6 colunas
+            return pd.Series(row.values, index=pd.Index(range(deslocamento, deslocamento + len(row))), name=row.name)
+
+        # Aplica a função para deslocar os dados
+        novo_df = df.apply(deslocar_dados, axis=1)
+
+        # Preencher células vazias
+        novo_df.fillna('', inplace=True)  # Preencher células vazias
+
+        desktop = Path.home() / "Desktop"
+        desk_str = str(desktop)
+        nome_req = '\saida.xlsx'
+        caminho = (desk_str + nome_req)
+
+        # Salvar para Excel (apenas exemplo, ajuste conforme necessário)
+        novo_df.to_excel(caminho, index=False)
 
 
-chama_classe = EnviaOrdensProducao()
-chama_classe.manipula_comeco()
+chama_classe = PcpPrevisao()
+chama_classe.calculo_1_dados_previsao()

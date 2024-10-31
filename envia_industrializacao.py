@@ -11,7 +11,6 @@ from email.header import Header
 from email import encoders
 from datetime import datetime
 import traceback
-from collections import defaultdict
 import pandas as pd
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl import load_workbook
@@ -534,7 +533,7 @@ class EnviaIndustrializacao:
 
     def procura_arquivos(self):
         try:
-            caminho = 'C:/OP/Terceiros/'
+            caminho = r'\\publico\C\OP\Terceiros/'
             extensao = ".pdf"
 
             arquivos_pdfs = []
@@ -785,18 +784,19 @@ class EnviaIndustrializacao:
             nova_lista = []
 
             cursor = conecta.cursor()
-            cursor.execute(f"SELECT id, codigo FROM produto where obs = '{num_desenho}';")
+            cursor.execute(f"SELECT id, codigo, id_versao, TERCEIRIZADOOBS FROM produto where obs = '{num_desenho}';")
             select_prod = cursor.fetchall()
 
-            idez, cod_pai = select_prod[0]
+            idez, cod_pai, id_estrut, servico = select_prod[0]
 
             cursor = conecta.cursor()
-            cursor.execute(f"SELECT mat.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
+            cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
                            f"conj.conjunto, prod.unidade, prod.localizacao, prod.quantidade "
-                           f"from materiaprima as mat "
-                           f"INNER JOIN produto prod ON mat.codigo = prod.codigo "
+                           f"from estrutura_produto as estprod "
+                           f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
                            f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
-                           f"where mat.mestre = {idez} order by conj.conjunto DESC, prod.descricao ASC;")
+                           f"where estprod.id_estrutura = {id_estrut} "
+                           f"order by conj.conjunto DESC, prod.descricao ASC;")
             tabela_estrutura = cursor.fetchall()
 
             if tabela_estrutura:
@@ -805,7 +805,7 @@ class EnviaIndustrializacao:
                 if itens_na_estrut == 1:
                     cod, descr, ref, conj, um, local, saldo = tabela_estrutura[0]
                     if float(saldo) >= qtde:
-                        dados = (cod_pai, cod, descr, ref, um, qtde, conj, arq_original, caminho)
+                        dados = (cod_pai, cod, descr, ref, um, qtde, conj, arq_original, caminho, servico)
                         nova_lista.append(dados)
                     else:
                         print(f"O saldo do {cod} é insuficiente para a quantidade solicitada: {saldo}")
@@ -856,86 +856,16 @@ class EnviaIndustrializacao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def manipula_lista_indust(self, lista_indust):
-        try:
-            fornecedores_oc = defaultdict(list)
-
-            for i in lista_indust:
-                cod_pai, cod, descr, ref, um, qtde, conj, arq_original, caminho = i
-
-                cursor = conecta.cursor()
-                cursor.execute(
-                    f"SELECT FIRST 1 oc.data, oc.numero, forn.registro, forn.razao, "
-                    f"prodoc.quantidade, prodoc.produzido, prodoc.dataentrega "
-                    f"FROM ordemcompra as oc "
-                    f"INNER JOIN produtoordemcompra as prodoc ON oc.id = prodoc.mestre "
-                    f"INNER JOIN produtoordemrequisicao as prodreq ON prodoc.id_prod_req = prodreq.id "
-                    f"INNER JOIN produto as prod ON prodoc.produto = prod.id "
-                    f"INNER JOIN fornecedores as forn ON oc.fornecedor = forn.id "
-                    f"INNER JOIN produtoordemsolicitacao as prodsol ON prodreq.id_prod_sol = prodsol.id "
-                    f"INNER JOIN ordemsolicitacao as sol ON prodsol.mestre = sol.idsolicitacao "
-                    f"where oc.entradasaida = 'E' "
-                    f"and prod.codigo = {cod_pai};")
-                dados_oc = cursor.fetchall()
-
-                if dados_oc:
-                    for i_oc in dados_oc:
-                        emissao_oc, num_oc, cod_fornc, nome_fornc, qtde_oc, prod_oc, entrega_oc = i_oc
-
-                        dados = (cod, descr, ref, um, qtde, conj, arq_original, caminho)
-
-                        fornecedores_oc[cod_fornc, nome_fornc].append(dados)
-                else:
-                    dados = (cod, descr, ref, um, qtde, conj, arq_original, caminho)
-
-                    fornecedores_oc[00, "FORNECEDOR DESCONHECIDO"].append(dados)
-
-            for dados_fornc, ordens in fornecedores_oc.items():
-                nome_forncedor = dados_fornc[1]
-                palavras = nome_forncedor.split()
-
-                qtde_pal = len(palavras)
-                if qtde_pal == 1:
-                    nome_fornc = palavras[0]
-                else:
-                    nome_fornc = palavras[0] + " " + palavras[1]
-
-                caminho_remessa = f'Solicitação NF Rem. industr. {nome_fornc}.xlsx'
-
-                arquivos_set = set()
-
-                for produto in ordens:
-                    nome_arquivo = produto[6]
-                    caminho_arquivo = produto[7]
-
-                    arquivos_set.add((nome_arquivo, caminho_arquivo))
-
-                self.gera_excel(dados_fornc, ordens, caminho_remessa)
-                self.envia_email(nome_fornc, arquivos_set, caminho_remessa)
-
-                self.excluir_arquivo(caminho_remessa)
-
-                arquivos_list = list(arquivos_set)
-                if arquivos_list:
-                    for ii in arquivos_list:
-                        nome_arq, caminho_arq = ii
-
-                        # self.excluir_arquivo(caminho_arq)
-                        fgfdsgsdg
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
     def manipula_comeco(self):
         try:
             lista_indust = []
 
             arquivos_pdfs = self.procura_arquivos()
 
-            for caminho in arquivos_pdfs:
-                arq_original = caminho[16:]
+            for arqsv in arquivos_pdfs:
+                caminho = arqsv
+
+                arq_original = caminho[25:]
 
                 if " - " in arq_original:
                     inicio = arq_original.find(" - ")
@@ -960,11 +890,12 @@ class EnviaIndustrializacao:
                         verifica_prod = self.procura_produto_pelo_desenho(num_des_com_d, arq_original, caminho)
 
                         if verifica_prod:
-                            lista_final = self.manipula_produto(num_des_com_d, qtde_produto, arq_original, caminho)
-
-                            if lista_final:
-                                for i in lista_final:
-                                    lista_indust.append(i)
+                            try:
+                                numero_maquina = num_desenho_arq[:2]
+                                num_maq_int = int(numero_maquina)
+                                print(num_maq_int, num_desenho_arq, qtde_produto)
+                            except ValueError:
+                                print("NUMERO DE DESENHO FORA DE PADRÃO!")
 
                     except ValueError:
                         print("A QUANTIDADE NÃO ESTÁ CERTA")
@@ -973,7 +904,8 @@ class EnviaIndustrializacao:
                     print('O ARQUIVO NÃO ESTÁ NO PADRÃO CERTO: "QTDE - NUM. DESENHO"')
 
             if lista_indust:
-                self.manipula_lista_indust(lista_indust)
+                for i in lista_indust:
+                    print("lista_indust", i)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

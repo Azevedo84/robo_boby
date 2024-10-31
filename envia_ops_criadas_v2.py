@@ -1,6 +1,7 @@
 import sys
 from banco_dados.conexao import conecta, conecta_robo
 from banco_dados.controle_erros import grava_erro_banco
+from comandos.conversores import valores_para_float
 import os
 import traceback
 import inspect
@@ -245,6 +246,7 @@ class EnviaOrdensProducao:
 
                 lista_substitutos, saldo_subs = self.teste(id_mat_e, lista_substitutos, self.num_op)
 
+                qtde_e_float = valores_para_float(qtde_e)
                 saldo_final += saldo_subs + float(saldo_prod_e)
 
                 select_os = self.consumo_op_por_id(self.num_op, id_mat_e)
@@ -252,13 +254,15 @@ class EnviaOrdensProducao:
                     for dados_os in select_os:
                         id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
 
-                        if qtde_mat_os < qtde_e:
-                            sobras = qtde_e - qtde_mat_os
+                        qtde_mat_os_float = valores_para_float(qtde_mat_os)
+
+                        if qtde_mat_os_float < qtde_e_float:
+                            sobras = qtde_e_float - qtde_mat_os_float
                             if sobras > saldo_final:
                                 todos_materiais_consumidos = False
                                 break
                 else:
-                    if saldo_final < qtde_e:
+                    if saldo_final < qtde_e_float:
                         todos_materiais_consumidos = False
                         break
 
