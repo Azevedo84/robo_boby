@@ -218,7 +218,7 @@ class PcpPrevisao:
 
     def calculo_1_dados_previsao(self):
         try:
-            cod_maquina = "16334"
+            cod_maquina = "21404"
             qtde = 1
             nivel = 1
 
