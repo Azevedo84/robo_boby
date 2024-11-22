@@ -251,13 +251,30 @@ class EnviaOrdensProducao:
 
                 select_os = self.consumo_op_por_id(self.num_op, id_mat_e)
                 if select_os:
-                    for dados_os in select_os:
-                        id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
+                    qtde_itens = len(select_os)
 
-                        qtde_mat_os_float = valores_para_float(qtde_mat_os)
+                    if qtde_itens == 1:
+                        for dados_os in select_os:
+                            id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
 
-                        if qtde_mat_os_float < qtde_e_float:
-                            sobras = qtde_e_float - qtde_mat_os_float
+                            qtde_mat_os_float = valores_para_float(qtde_mat_os)
+
+                            if qtde_mat_os_float < qtde_e_float:
+                                sobras = qtde_e_float - qtde_mat_os_float
+                                if sobras > saldo_final:
+                                    todos_materiais_consumidos = False
+                                    break
+                    else:
+                        qtde_consumo_op_final = 0
+
+                        for dados_os in select_os:
+                            id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
+
+                            qtde_mat_os_float = valores_para_float(qtde_mat_os)
+                            qtde_consumo_op_final += qtde_mat_os_float
+
+                        if qtde_consumo_op_final < qtde_e_float:
+                            sobras = qtde_e_float - qtde_consumo_op_final
                             if sobras > saldo_final:
                                 todos_materiais_consumidos = False
                                 break
