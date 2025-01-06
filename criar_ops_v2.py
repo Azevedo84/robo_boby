@@ -38,6 +38,8 @@ class EnviaOrdensProducao:
         self.data_emissao = ""
         self.data_entrega = ""
 
+        self.caminho_poppler = r'C:\Program Files\poppler-24.08.0\Library\bin'
+
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
             tb = traceback.extract_tb(excecao)
@@ -123,7 +125,7 @@ class EnviaOrdensProducao:
 
             data_emissao = f"Emissão: {self.data_emissao}"
 
-            images = convert_from_path(self.caminho_original, 500, poppler_path=r'C:\Program Files\poppler-0.68.0\bin')
+            images = convert_from_path(self.caminho_original, 500, poppler_path=self.caminho_poppler)
 
             imgs = images[0]
 
@@ -160,7 +162,7 @@ class EnviaOrdensProducao:
 
             data_emissao = f"Emissão: {self.data_emissao}"
 
-            images = convert_from_path(self.caminho_original, 500, poppler_path=r'C:\Program Files\poppler-0.68.0\bin')
+            images = convert_from_path(self.caminho_original, 500, poppler_path=self.caminho_poppler)
 
             imgs = images[0]
 
