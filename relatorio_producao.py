@@ -1,4 +1,5 @@
 import sys
+
 from banco_dados.conexao import conecta
 from banco_dados.controle_erros import grava_erro_banco
 from comandos.conversores import valores_para_float
@@ -234,7 +235,8 @@ class PcpPrevisao:
     def excel(self, tabela_final):
         try:
             if tabela_final:
-                caminho = 'Status Produção.xlsx'
+                caminho = fr'C:\Users\Anderson\PycharmProjects\robo_boby\Status Produção.xlsx'
+                arquivo = 'Status Produção.xlsx'
 
                 if tabela_final:
                     workbook = criar_workbook()
@@ -291,7 +293,7 @@ class PcpPrevisao:
                     workbook.save(caminho)
 
                     print("Excel Salvo!")
-                    self.envia_email(caminho)
+                    self.envia_email(caminho, arquivo)
                     self.excluir_arquivo(caminho)
 
         except Exception as e:
@@ -345,7 +347,7 @@ class PcpPrevisao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def envia_email(self, caminho):
+    def envia_email(self, caminho, arquivo):
         try:
             saudacao, msg_final, email_user, to, password = self.dados_email()
 
@@ -373,7 +375,7 @@ class PcpPrevisao:
             part.set_payload(attachment.read())
             encoders.encode_base64(part)
             part.add_header('Content-Disposition', 'attachment',
-                            filename=Header(caminho, 'utf-8').encode())
+                            filename=Header(arquivo, 'utf-8').encode())
             msg.attach(part)
 
             text = msg.as_string()
