@@ -123,7 +123,8 @@ class EnviaOrdensProducao:
 
             data_emissao = f"Emissão: {self.data_emissao}"
 
-            images = convert_from_path(self.caminho_original, 500, poppler_path=r'C:\Program Files\poppler-0.68.0\bin')
+            images = convert_from_path(self.caminho_original, 500,
+                                       poppler_path=r'C:\Program Files\poppler-0.68.0\bin')
 
             imgs = images[0]
 
@@ -160,7 +161,8 @@ class EnviaOrdensProducao:
 
             data_emissao = f"Emissão: {self.data_emissao}"
 
-            images = convert_from_path(self.caminho_original, 500, poppler_path=r'C:\Program Files\poppler-0.68.0\bin')
+            images = convert_from_path(self.caminho_original, 500,
+                                       poppler_path=r'C:\Program Files\poppler-0.68.0\bin')
 
             imgs = images[0]
 

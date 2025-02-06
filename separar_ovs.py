@@ -1,12 +1,10 @@
 import sys
 from banco_dados.conexao import conecta, conecta_robo
 from banco_dados.controle_erros import grava_erro_banco
-from comandos.conversores import valores_para_float
 import os
+import traceback
 import inspect
 import smtplib
-import traceback
-
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -19,13 +17,13 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 
 
-class EnviaIndustrializacao:
+class SepararOVS:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
 
         self.manipula_comeco()
-        
+
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
             tb = traceback.extract_tb(excecao)
@@ -103,7 +101,7 @@ class EnviaIndustrializacao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def gerar_pdf_listagem_separar(self, caminho_listagem, lista_final):
+    def gerar_pdf_listagem_separar(self, caminho_listagem, dados_cliente, produtos_ov):
         try:
             margem_esquerda = 0
             margem_direita = 5
@@ -116,8 +114,11 @@ class EnviaIndustrializacao:
                                     topMargin=margem_superior,
                                     bottomMargin=margem_inferior)
 
-            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'SALDO']
-            elem_lista = self.adicionar_tabelas_listagem(lista_final, cabecalho_lista)
+            cabecalho_op = ['DATA', 'Nº OV', 'CLIENTE']
+            elem_op = self.adicionar_tabelas_listagem(dados_cliente, cabecalho_op)
+
+            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE', 'LOCALIZAÇÃO', 'SALDO']
+            elem_lista = self.adicionar_tabelas_listagem(produtos_ov, cabecalho_lista)
 
             cabecalho_transp = ['', 'TRANSPORTE']
             dados_transp = [('PESO LÍQUIDO', ''), ('PESO BRUTO', ''), ('VOLUME', '')]
@@ -137,7 +138,8 @@ class EnviaIndustrializacao:
             tabela_medida_motorista = Table([[elem_transp, elem_medida, elem_motorista]],
                                             colWidths=[170, 170])  # Ajuste as larguras conforme necessário
 
-            elementos = (elem_lista + [espaco_em_branco] +
+            elementos = (elem_op + [espaco_em_branco] +
+                         elem_lista + [espaco_em_branco] +
                          [tabela_medida_motorista])  # Adiciona a tabela com medidas e motorista lado a lado
 
             doc.build(elementos)
@@ -147,38 +149,37 @@ class EnviaIndustrializacao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def inserir_no_banco(self, lista_banco):
+    def inserir_no_banco(self, dados_cliente, num_ov):
         try:
-            for i in lista_banco:
-                id_mov, cod = i
+            id_cliente = dados_cliente[0][3]
 
-                cursor = conecta_robo.cursor()
-                cursor.execute(f"Insert into ENVIA_INDUSTRIALIZACAO (ID, id_envia_mov, cod_prod) "
-                               f"values (GEN_ID(GEN_ENVIA_INDUSTRIALIZACAO_ID,1), {id_mov}, {cod});")
+            cursor = conecta_robo.cursor()
+            cursor.execute(f"Insert into SEPARAR_OVS (ID, NUM_OV, CLIENTE_ID) "
+                           f"values (GEN_ID(GEN_SEPARAR_OVS_ID,1), {num_ov}, {id_cliente});")
 
-                conecta_robo.commit()
+            conecta_robo.commit()
 
-                print(f"Salvo no banco com sucesso!")
+            print(f"OV {num_ov} salvo no banco com sucesso!")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def envia_email(self, caminho, arquivo):
+    def envia_email(self, num_ov, caminho, arquivo):
         try:
             saudacao, msg_final, email_user, to, password = self.dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 
-            subject = f'IND - Separar Produtos para industrialização'
+            subject = f'OV - Separar material OV {num_ov}'
 
             msg = MIMEMultipart()
             msg['From'] = email_user
             msg['Subject'] = subject
 
             body = f"{saudacao}\n\n" \
-                   f"Alguns produtos estão prontos para enviar para industrialização.\n\n" \
+                   f"A Ordem de Venda Nº {num_ov} está com todo material em estoque para ser separado.\n\n" \
                    f"{msg_final}"
 
             msg.attach(MIMEText(body, 'plain'))
@@ -206,7 +207,7 @@ class EnviaIndustrializacao:
 
             server.quit()
 
-            print(f'Email enviado com sucesso!')
+            print(f'OV {num_ov} enviada com sucesso!')
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -227,118 +228,57 @@ class EnviaIndustrializacao:
 
     def manipula_comeco(self):
         try:
-            lista_produtos = []
-
-            lista_final = []
-            lista_banco = []
-
             cursor = conecta.cursor()
-            cursor.execute("""
-                SELECT id, data_mov 
-                FROM envia_mov 
-                WHERE data_mov >= DATEADD(-1 MONTH TO CURRENT_DATE)
-            """)
-            dados_mov = cursor.fetchall()
+            cursor.execute(f"SELECT oc.id, oc.data, oc.numero, cli.razao, oc.cliente "
+                           f"FROM ordemcompra as oc "
+                           f"INNER JOIN clientes as cli ON oc.cliente = cli.id "
+                           f"where oc.entradasaida = 'S' "
+                           f"AND oc.STATUS = 'A';")
+            dados_oc = cursor.fetchall()
 
-            if dados_mov:
-                for i in dados_mov:
-                    print(i)
-                    id_mov, data_mov = i
+            if dados_oc:
+                for dados in dados_oc:
+                    lista_email = []
+                    dados_cliente = []
 
-                    cursor = conecta.cursor()
-                    cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, ''), "
-                                   f"prod.unidade, prod.localizacao, prod.quantidade "
-                                   f"FROM movimentacao AS mov "
-                                   f"INNER JOIN produto prod ON mov.produto = prod.id "
-                                   f"WHERE mov.data = '{data_mov}' and mov.tipo < 200;")
-                    dados_mov = cursor.fetchall()
+                    id_oc, data, numero, cliente, id_cliente = dados
 
-                    if dados_mov:
-                        for ii in dados_mov:
-                            print("   ", ii)
-                            cod, descr, ref, um, local, saldo = ii
+                    cursor = conecta_robo.cursor()
+                    cursor.execute(f"SELECT * FROM SEPARAR_OVS where NUM_OV = {numero} and CLIENTE_ID = {id_cliente};")
+                    dados_lancados = cursor.fetchall()
 
-                            prod_saldo_encontrado = False
-                            for cod_sal_e, descr_e in lista_produtos:
-                                if cod_sal_e == cod:
-                                    prod_saldo_encontrado = True
-                                    break
+                    if not dados_lancados:
+                        coco = (data, numero, cliente, id_cliente)
+                        dados_cliente.append(coco)
 
-                            if not prod_saldo_encontrado:
-                                saldo_float = valores_para_float(saldo)
+                        cursor = conecta.cursor()
+                        cursor.execute(f"SELECT prodoc.codigo, prod.descricao, "
+                                       f"COALESCE(prod.obs, ''), prod.unidade, prodoc.quantidade, "
+                                       f"prodoc.produzido, prod.localizacao, prod.quantidade "
+                                       f"FROM produtoordemcompra as prodoc "
+                                       f"INNER JOIN produto as prod ON prodoc.produto = prod.id "
+                                       f"where prodoc.mestre = {id_oc} "
+                                       f"AND prodoc.produzido < prodoc.quantidade "
+                                       f"ORDER BY prodoc.dataentrega;")
+                        dados_prod_oc = cursor.fetchall()
 
-                                if saldo_float > 0:
-                                    dados_colhidos = self.manipula_dados_onde_usa(cod)
-                                    if dados_colhidos:
-                                        dados = (cod, descr)
-                                        lista_produtos.append(dados)
+                        for dados1 in dados_prod_oc:
+                            codigo, descricao, ref, um, qtde, produzido, local, saldo = dados1
+                            falta = "%.3f" % (float(qtde) - float(produzido))
 
-                                        cur = conecta_robo.cursor()
-                                        cur.execute(f"SELECT * from ENVIA_INDUSTRIALIZACAO "
-                                                    f"where id_envia_mov = {id_mov} and cod_prod = {cod};")
-                                        dados_salvos = cur.fetchall()
+                            dadus = (codigo, descricao, ref, um, falta, local, saldo)
+                            lista_email.append(dadus)
 
-                                        if not dados_salvos:
-                                            dadoss = (cod, descr, ref, um, local, saldo)
-                                            print(dados_colhidos, dadoss)
-                                            lista_final.append(dadoss)
+                        if lista_email:
+                            num_ov = dados_cliente[0][1]
 
-                                            dadosss = (id_mov, cod)
-                                            lista_banco.append(dadosss)
+                            caminho = fr'C:\Users\Anderson\PycharmProjects\robo_boby\Listagem - OV {num_ov}.pdf'
+                            arquivo = f'Listagem - OV {num_ov}.pdf'
 
-            if lista_final:
-                caminho = fr'C:\Users\Anderson\PycharmProjects\robo_boby\Listagem - Ind.pdf'
-                arquivo = f'Listagem - ind.pdf'
-
-                self.gerar_pdf_listagem_separar(arquivo, lista_final)
-                self.inserir_no_banco(lista_banco)
-                self.envia_email(caminho, arquivo)
-                self.excluir_arquivo(arquivo)
-
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def manipula_dados_onde_usa(self, cod_prod):
-        try:
-            planilha_nova = []
-
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT estprod.id, estprod.id_estrutura, estprod.quantidade "
-                           f"from estrutura_produto as estprod "
-                           f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
-                           f" where prod.codigo = {cod_prod};")
-            tabela_estrutura = cursor.fetchall()
-            for i in tabela_estrutura:
-                ides_mat, id_estrutura, qtde = i
-
-                cursor = conecta.cursor()
-                cursor.execute(f"SELECT id, codigo "
-                               f"from produto "
-                               f" where id_versao = {id_estrutura};")
-                produto_pai = cursor.fetchall()
-                if produto_pai:
-                    cod_produto = produto_pai[0][1]
-
-                    cursor = conecta.cursor()
-                    cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, ''), prod.unidade, "
-                                   f"COALESCE(prod.obs2, '') "
-                                   f"from estrutura as est "
-                                   f"INNER JOIN produto prod ON est.id_produto = prod.id "
-                                   f"where prod.codigo = {cod_produto} and prod.tipomaterial = 119;")
-                    select_prod = cursor.fetchall()
-
-                    if select_prod:
-                        cod, descr, ref, um, obs = select_prod[0]
-                        dados = (cod, descr, ref, um, qtde)
-                        planilha_nova.append(dados)
-
-            if planilha_nova:
-                planilha_nova_ordenada = sorted(planilha_nova, key=lambda x: x[1])
-
-                return planilha_nova_ordenada
+                            self.gerar_pdf_listagem_separar(arquivo, dados_cliente, lista_email)
+                            self.inserir_no_banco(dados_cliente, num_ov)
+                            self.envia_email(num_ov, caminho, arquivo)
+                            self.excluir_arquivo(arquivo)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -346,4 +286,4 @@ class EnviaIndustrializacao:
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
 
-chama_classe = EnviaIndustrializacao()
+chama_classe = SepararOVS()
