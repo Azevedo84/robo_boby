@@ -18,6 +18,7 @@ from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime
+import datetime
 
 
 class PcpPrevisao:
@@ -25,7 +26,8 @@ class PcpPrevisao:
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
 
-        self.calculo_1_dados_previsao()
+        if datetime.datetime.today().weekday() == 1:
+            self.calculo_1_dados_previsao()
 
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
