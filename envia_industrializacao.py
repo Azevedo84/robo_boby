@@ -242,7 +242,6 @@ class EnviaIndustrializacao:
 
             if dados_mov:
                 for i in dados_mov:
-                    print(i)
                     id_mov, data_mov = i
 
                     cursor = conecta.cursor()
@@ -255,7 +254,6 @@ class EnviaIndustrializacao:
 
                     if dados_mov:
                         for ii in dados_mov:
-                            print("   ", ii)
                             cod, descr, ref, um, local, saldo = ii
 
                             prod_saldo_encontrado = False

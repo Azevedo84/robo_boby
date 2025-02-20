@@ -11,6 +11,8 @@ class LimpaLocalSaldoZerado:
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
 
+        self.manipula_comeco()
+
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
             tb = traceback.extract_tb(excecao)
@@ -32,7 +34,27 @@ class LimpaLocalSaldoZerado:
 
     def manipula_comeco(self):
         try:
-            pass
+            cursor = conecta.cursor()
+            cursor.execute("""
+                SELECT DISTINCT prod.id, prod.codigo, prod.localizacao
+                FROM movimentacao AS mov
+                INNER JOIN produto AS prod ON mov.produto = prod.id
+                WHERE prod.quantidade = 0 
+                AND prod.localizacao IS NOT NULL;
+            """)
+            dados_mov = cursor.fetchall()
+
+            if dados_mov:
+                for i in dados_mov:
+                    id_prod, cod_prod, local = i
+                    print(i)
+
+                    cursor = conecta.cursor()
+                    cursor.execute("UPDATE produto SET LOCALIZACAO = NULL WHERE id = ?", (id_prod,))
+
+                    conecta.commit()
+
+                    print(f"Cadastro do produto {cod_prod} atualizado com Sucesso {local}!")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

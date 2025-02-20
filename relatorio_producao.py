@@ -26,6 +26,8 @@ class PcpPrevisao:
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
 
+        print(datetime.datetime.today().weekday())
+
         if datetime.datetime.today().weekday() == 1:
             self.calculo_1_dados_previsao()
 
