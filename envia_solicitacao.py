@@ -44,12 +44,12 @@ class EnviaSolicitacaoCompra:
 
     def envia_email(self, numero_sol, nome_computador, anexos):
         try:
-            if nome_computador == "HALLMAQMAQUINAS":
-                solicitante = "Anderson"
-            elif nome_computador == "PROJETO":
-                solicitante = "Alessandro"
-            elif nome_computador == "ALMOX":
-                solicitante = "Jonatan"
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT versao, responsavel FROM ENVIA_PC where descricao = '{nome_computador}';")
+            dados_pc = cursor.fetchall()
+
+            if dados_pc:
+                solicitante = dados_pc[0][1]
             else:
                 solicitante = "Desconhecido"
 

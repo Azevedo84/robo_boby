@@ -205,6 +205,9 @@ class EnviaOrdensCompraPendentes:
                                f"AND data_entrega = '{data_entrega}';")
                 ja_enviei = cursor.fetchall()
 
+                if data_entrega < data_necessidade:
+                    print(data_entrega, data_necessidade, numero)
+
                 if data_entrega < data_necessidade and not ja_enviei:
                     todas_oc = bc_ander.consultar_1_cond('tab_ordens', 'Número OC', numero)
 

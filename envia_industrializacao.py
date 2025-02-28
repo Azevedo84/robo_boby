@@ -244,6 +244,8 @@ class EnviaIndustrializacao:
                 for i in dados_mov:
                     id_mov, data_mov = i
 
+                    print(data_mov)
+
                     cursor = conecta.cursor()
                     cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, ''), "
                                    f"prod.unidade, prod.localizacao, prod.quantidade "
@@ -278,7 +280,6 @@ class EnviaIndustrializacao:
 
                                         if not dados_salvos:
                                             dadoss = (cod, descr, ref, um, local, saldo)
-                                            print(dados_colhidos, dadoss)
                                             lista_final.append(dadoss)
 
                                             dadosss = (id_mov, cod)
@@ -327,6 +328,9 @@ class EnviaIndustrializacao:
                                    f"INNER JOIN produto prod ON est.id_produto = prod.id "
                                    f"where prod.codigo = {cod_produto} and prod.tipomaterial = 119;")
                     select_prod = cursor.fetchall()
+
+                    if cod_prod == "17814":
+                        print(select_prod)
 
                     if select_prod:
                         cod, descr, ref, um, obs = select_prod[0]

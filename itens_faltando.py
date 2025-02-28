@@ -255,6 +255,7 @@ class EnviaOrdensProducao:
 
                     num_op, cod_pai, descr_pai, cod_e, descr_e, ref_e, um_e, sobras, tipo_e = iii
                     if tipo_e == "INDUSTRIALIZACAO":
+                        print(iii)
                         qtde_ind = self.retorna_materia_prima_industrializacao(cod_e)
 
                     qtde_ocs = self.retorna_oc_abertas(cod_e)
@@ -333,6 +334,9 @@ class EnviaOrdensProducao:
                         num_sol_oc, id_req_oc, emissao_oc, num_oc, forncec_oc, qtde_oc, prod_oc, entrega_oc = i_oc
                         qtdes_oc += float(qtde_oc)
 
+            if cod_prod == "21595":
+                print(qtdes_oc)
+
             return qtdes_oc
 
         except Exception as e:
@@ -359,6 +363,9 @@ class EnviaOrdensProducao:
 
                     numeros_ops += qtde_op_float
 
+            if cod_prod == "21595":
+                print(numeros_ops)
+
             return numeros_ops
 
         except Exception as e:
@@ -374,6 +381,8 @@ class EnviaOrdensProducao:
             cursor.execute(f"SELECT id, codigo, id_versao FROM produto where codigo = {cod_prod};")
             select_prod = cursor.fetchall()
             id_pai, cod, id_versao = select_prod[0]
+
+            print(select_prod[0])
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT prod.codigo, prod.quantidade "
