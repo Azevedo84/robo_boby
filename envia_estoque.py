@@ -282,20 +282,22 @@ class EnviaEstoqueFinal:
     def verifica_banco(self):
         try:
             data_hoje = date.today()
-            primeiro_dia_do_mes_atual = date(data_hoje.year, data_hoje.month, 1)
-            ultimo_dia_mes = primeiro_dia_do_mes_atual - timedelta(days=1)
-            data_string = ultimo_dia_mes.strftime("%d-%m-%Y")
 
-            locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
-            nome_mes = ultimo_dia_mes.strftime('%B')
-            ano = ultimo_dia_mes.strftime('%y')
+            if data_hoje.day > 1:
+                primeiro_dia_do_mes_atual = date(data_hoje.year, data_hoje.month, 1)
+                ultimo_dia_mes = primeiro_dia_do_mes_atual - timedelta(days=1)
+                data_string = ultimo_dia_mes.strftime("%d-%m-%Y")
 
-            cursor = conecta_robo.cursor()
-            cursor.execute(f"SELECT * FROM envia_relat_estoque where data_relatorio = '{ultimo_dia_mes}';")
-            select_envio = cursor.fetchall()
+                locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+                nome_mes = ultimo_dia_mes.strftime('%B')
+                ano = ultimo_dia_mes.strftime('%y')
 
-            if not select_envio:
-                self.manipula_dados_acinplas(ultimo_dia_mes, data_string, nome_mes, ano)
+                cursor = conecta_robo.cursor()
+                cursor.execute(f"SELECT * FROM envia_relat_estoque where data_relatorio = '{ultimo_dia_mes}';")
+                select_envio = cursor.fetchall()
+
+                if not select_envio:
+                    self.manipula_dados_acinplas(ultimo_dia_mes, data_string, nome_mes, ano)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

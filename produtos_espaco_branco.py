@@ -27,6 +27,9 @@ for i in select_prod:
 
         print(f"Cadastro do produto {cod} - {descr} atualizado com Sucesso!")
 
+    elif cod.endswith("\n"):
+        print("O código termina com uma quebra de linha.", cod)
+
     elif descr.endswith(" "):
         texto_sem_espaco = descr.rstrip()
 
@@ -42,6 +45,16 @@ for i in select_prod:
 
         cursor = conecta.cursor()
         cursor.execute("UPDATE produto SET DESCRICAO = ? WHERE id = ?", (descr_sem_espaco, id_prod,))
+
+        conecta.commit()
+
+        print(f"Cadastro do produto {cod} - {descr} atualizado com Sucesso!")
+
+    elif descr.endswith("\n"):
+        descr_sem_quebra = descr.rstrip("\n")
+
+        cursor = conecta.cursor()
+        cursor.execute("UPDATE produto SET DESCRICAO = ? WHERE id = ?", (descr_sem_quebra, id_prod,))
 
         conecta.commit()
 
@@ -68,6 +81,16 @@ for i in select_prod:
 
             print(f"Cadastro do produto {cod} - {compl_sem_espaco} atualizado com Sucesso!")
 
+        elif compl.endswith("\n"):
+            compl_sem_quebra = compl.rstrip("\n")
+
+            cursor = conecta.cursor()
+            cursor.execute("UPDATE produto SET DESCRICAOCOMPLEMENTAR = ? WHERE id = ?", (compl_sem_quebra, id_prod,))
+
+            conecta.commit()
+
+            print(f"Cadastro do produto {cod} - {descr} atualizado com Sucesso!")
+
     elif ref:
         if ref.endswith(" "):
             ref_sem_espaco = ref.rstrip()
@@ -88,3 +111,13 @@ for i in select_prod:
             conecta.commit()
 
             print(f"Cadastro do produto {cod} - {ref_sem_espaco} atualizado com Sucesso!")
+
+        elif ref.endswith("\n"):
+            ref_sem_quebra = ref.rstrip("\n")
+
+            cursor = conecta.cursor()
+            cursor.execute("UPDATE produto SET OBS = ? WHERE id = ?", (ref_sem_quebra, id_prod,))
+
+            conecta.commit()
+
+            print(f"Cadastro do produto {cod} - {descr} atualizado com Sucesso!")
