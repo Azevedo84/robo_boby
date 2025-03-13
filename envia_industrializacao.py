@@ -244,8 +244,6 @@ class EnviaIndustrializacao:
                 for i in dados_mov:
                     id_mov, data_mov = i
 
-                    print(data_mov)
-
                     cursor = conecta.cursor()
                     cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, ''), "
                                    f"prod.unidade, prod.localizacao, prod.quantidade "
@@ -271,12 +269,14 @@ class EnviaIndustrializacao:
                                     dados_colhidos = self.manipula_dados_onde_usa(cod)
                                     if dados_colhidos:
                                         dados = (cod, descr)
+
                                         lista_produtos.append(dados)
 
                                         cur = conecta_robo.cursor()
                                         cur.execute(f"SELECT * from ENVIA_INDUSTRIALIZACAO "
                                                     f"where id_envia_mov = {id_mov} and cod_prod = {cod};")
                                         dados_salvos = cur.fetchall()
+
 
                                         if not dados_salvos:
                                             dadoss = (cod, descr, ref, um, local, saldo)
@@ -293,7 +293,6 @@ class EnviaIndustrializacao:
                 self.inserir_no_banco(lista_banco)
                 self.envia_email(caminho, arquivo)
                 self.excluir_arquivo(arquivo)
-
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -313,12 +312,18 @@ class EnviaIndustrializacao:
             for i in tabela_estrutura:
                 ides_mat, id_estrutura, qtde = i
 
+                if cod_prod == "21560":
+                    print("1", i)
+
                 cursor = conecta.cursor()
                 cursor.execute(f"SELECT id, codigo "
                                f"from produto "
                                f" where id_versao = {id_estrutura};")
                 produto_pai = cursor.fetchall()
                 if produto_pai:
+
+                    if cod_prod == "21560":
+                        print("2", produto_pai)
                     cod_produto = produto_pai[0][1]
 
                     cursor = conecta.cursor()
@@ -329,10 +334,9 @@ class EnviaIndustrializacao:
                                    f"where prod.codigo = {cod_produto} and prod.tipomaterial = 119;")
                     select_prod = cursor.fetchall()
 
-                    if cod_prod == "17814":
-                        print(select_prod)
-
                     if select_prod:
+                        if cod_prod == "21560":
+                            print("3", select_prod)
                         cod, descr, ref, um, obs = select_prod[0]
                         dados = (cod, descr, ref, um, qtde)
                         planilha_nova.append(dados)
