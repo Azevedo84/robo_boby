@@ -6,14 +6,12 @@ import os
 import inspect
 import smtplib
 import traceback
-
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime
-
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
