@@ -976,6 +976,7 @@ class EnviaMovimentacao:
                             for dados_op in ops_entradas:
                                 data, cod, descr, ref, um, entrada, saida, saldo, op, cfop, local, solicitante, \
                                     obs = dados_op
+                                print(data, cod, op)
 
                                 posicao = op.find("OP ")
                                 inicio = posicao + 3
