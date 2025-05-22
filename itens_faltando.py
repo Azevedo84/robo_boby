@@ -162,6 +162,7 @@ class EnviaOrdensProducao:
                     if sobras > 0:
                         dados = (num_op, cod_pai, descr_pai, cod_e, descr_e, ref_e, um_e, sobras, tipo_e)
                         falta_material.append(dados)
+
                         # print("falta material: ", cod_e, descr_e, sobras)
 
                 # print("\n\n")
@@ -362,9 +363,6 @@ class EnviaOrdensProducao:
                     qtde_op_float = valores_para_float(qtde_op)
 
                     numeros_ops += qtde_op_float
-
-            if cod_prod == "21595":
-                print(numeros_ops)
 
             return numeros_ops
 

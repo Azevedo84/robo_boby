@@ -92,6 +92,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def converte_png_para_pdf(self, input_png, output_pdf):
         try:
@@ -151,6 +152,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def cria_imagem_do_desenho_conjunto(self):
         try:
@@ -188,6 +190,8 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+            return None
 
     def excluir_arquivo(self, caminho_arquivo):
         try:
@@ -260,10 +264,13 @@ class EnviaOrdensProducao:
 
                 return sel_estrutura
 
+            return []
+
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def envia_email_nao_acha_desenho(self):
         try:
@@ -510,6 +517,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def procura_produto_pelo_desenho(self):
         try:
@@ -580,6 +588,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def manipula_comeco(self):
         try:

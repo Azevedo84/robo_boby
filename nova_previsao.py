@@ -2,15 +2,12 @@ import sys
 from banco_dados.conexao import conecta
 from banco_dados.controle_erros import grava_erro_banco
 from comandos.conversores import valores_para_float
-from comandos.excel import carregar_workbook, edita_alinhamento, edita_bordas, edita_preenchimento
-from comandos.excel import edita_fonte, criar_workbook, letra_coluna, ajusta_larg_coluna
 from datetime import timedelta, date, datetime
 import inspect
 import os
 import math
-from pathlib import Path
-import re
 import traceback
+from pathlib import Path
 
 
 class TelaPcpPrevisaoV2:
@@ -223,9 +220,6 @@ class TelaPcpPrevisaoV2:
 
                                             qtde_sum_float = valores_para_float(qtde_sum)
 
-                                            if cod_filho == "21313":
-                                                print("dados op:", dados_res)
-
                                             qtde_ops += qtde_sum_float
 
             return qtde_ops
@@ -425,7 +419,6 @@ class TelaPcpPrevisaoV2:
 
             if tabela_final:
                 self.dados_pi = tabela_final
-                print("lança tabela", tabela_final)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -519,8 +512,6 @@ class TelaPcpPrevisaoV2:
 
     def calculo_3_verifica_estrutura(self, dados_total):
         try:
-            print("calculo_3_verifica_estrutura")
-
             pontos, nivel, codigos, qtdei, cod_or, descr_or, lista_saldos, lista_ops, lista_ocs, cod_fat, \
             num_pi, pacote = dados_total
 
@@ -532,6 +523,8 @@ class TelaPcpPrevisaoV2:
                            f"where prod.codigo = {codigos};")
             detalhes_pai = cursor.fetchall()
             id_pai, cod_pai, descr_pai, ref_pai, um_pai, saldo, tipo, id_estrut = detalhes_pai[0]
+
+            print(cod_pai, descr_pai, ref_pai, um_pai)
 
             qtdei_float = valores_para_float(qtdei)
             saldo_float = valores_para_float(saldo)
@@ -560,18 +553,12 @@ class TelaPcpPrevisaoV2:
                 lanca_saldo = (cod_pai, novo_saldo)
                 lista_saldos.append(lanca_saldo)
 
-            if cod_pai == "21578":
-                print("num_pi:", num_pi, "cod_or:", cod_or, "descr_or:", descr_or, "qtdei:", qtdei, novo_saldo, qtde_flt_c_oc)
-
             if novo_saldo < 0 < qtde_flt_c_oc:
                 coco = novo_saldo + qtde_flt_c_oc
                 if coco > 0:
                     nova_qtde = novo_saldo * -1
                 else:
                     nova_qtde = qtde_flt_c_oc
-
-                if cod_pai == "21578":
-                    print("entrei", nova_qtde)
 
                 dadoss = (pontos, nivel, cod_pai, descr_pai, ref_pai, um_pai, nova_qtde, cod_or, descr_or,
                           cod_fat, num_pi, pacote)
@@ -797,8 +784,6 @@ class TelaPcpPrevisaoV2:
 
             nova_lista = []
 
-            print("extrair tabela PI")
-
             dados_pi = self.dados_pi
 
             contagem_cod_fat_num_pi_fat = {}
@@ -868,7 +853,6 @@ class TelaPcpPrevisaoV2:
                 if lista_nova_nova:
                     tab_ordenada = sorted(lista_nova_nova, key=lambda x: converter_data(x[7]))
 
-                    print("lança tabela PI", tab_ordenada)
                     self.dados_pi = tab_ordenada
 
         except Exception as e:
@@ -878,452 +862,214 @@ class TelaPcpPrevisaoV2:
 
     def excel(self):
         try:
-            lista_acumulada = []
+            dados_extraidos = self.dados_previsao
+            dados_por_codigo = {}
 
-            nova_lista_compras = []
-            nova_lista_acabado = []
+            if dados_extraidos:
+                for i in dados_extraidos:
+                    codigo = i[1]
+                    nivel = i[0]
+                    quantidade = float(i[5])
+
+                    if codigo not in dados_por_codigo:
+                        dados_por_codigo[codigo] = list(i)
+                        dados_por_codigo[codigo][5] = quantidade
+                    else:
+                        dados_por_codigo[codigo][5] += quantidade
+                        if nivel > dados_por_codigo[codigo][0]:
+                            nova_entrada = list(i)
+                            nova_entrada[5] = dados_por_codigo[codigo][5]
+                            dados_por_codigo[codigo] = nova_entrada
+
+            resultado = []
+            for item in dados_por_codigo.values():
+                item[5] = f'{item[5]:.2f}'
+                resultado.append(tuple(item))
+
+            produtos_por_servico = {}
+
+            for linha in resultado:
+                pontos, codis, descr, ref, um, qtde, entrega, conj, cod_pai, pacote, num_pi = linha
+
+                cursor = conecta.cursor()
+                cursor.execute(f"""
+                    SELECT prod.id, prod.codigo, prod.descricao, COALESCE(prod.obs, ''),
+                           prod.unidade, prod.conjunto, tip.tipomaterial, COALESCE(serv.descricao, '')
+                    FROM produto as prod
+                    LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id
+                    LEFT JOIN SERVICO_INTERNO as serv ON prod.ID_SERVICO_INTERNO = serv.id
+                    WHERE prod.codigo = '{codis}';
+                """)
+                detalhes_produto = cursor.fetchall()
+                if not detalhes_produto:
+                    continue
+
+                id_prod, codiss, descr, ref, um, conjunto, tipo, servico = detalhes_produto[0]
+
+                cursor = conecta.cursor()
+                cursor.execute(f"""
+                    SELECT op.numero, op.codigo, op.id_estrutura, prod.descricao,
+                           COALESCE(prod.obs, ''), prod.unidade,
+                           COALESCE(prod.tipomaterial, ''), op.quantidade,
+                           COALESCE(prod.id_servico_interno, '')
+                    FROM ordemservico as op
+                    INNER JOIN produto as prod ON op.produto = prod.id
+                    WHERE op.status = 'A' AND prod.codigo = '{codis}';
+                """)
+                ops_abertas = cursor.fetchall()
+                num_op = ops_abertas[0][0] if ops_abertas else ""
+
+                produto_info = {
+                    "pontos": pontos,
+                    "codigo": codis,
+                    "descricao": descr,
+                    "referencia": ref,
+                    "unidade": um,
+                    "tipo_material": tipo,
+                    "quantidade": qtde,
+                    "conjunto": conj,
+                    "cod_pai": cod_pai,
+                    "pacote": pacote,
+                    "pi": num_pi,
+                    "num_op": num_op
+                }
+
+                if servico not in produtos_por_servico:
+                    produtos_por_servico[servico] = []
+                produtos_por_servico[servico].append(produto_info)
+
+            # NOVA LÓGICA: verificar OPs não incluídas
+            codigos_existentes = set()
+            for produtos in produtos_por_servico.values():
+                for p in produtos:
+                    codigos_existentes.add(p["codigo"])
+
+            cursor = conecta.cursor()
+            cursor.execute("""
+                SELECT op.numero, prod.codigo, prod.descricao, COALESCE(prod.obs, ''), prod.unidade,
+                       COALESCE(prod.tipomaterial, ''), op.quantidade
+                FROM ordemservico as op
+                INNER JOIN produto as prod ON op.produto = prod.id
+                WHERE op.status = 'A';
+            """)
+            ops_abertas_gerais = cursor.fetchall()
+
+            ops_sem_definicao = []
+            for numero, codigo, descricao, referencia, unidade, tipo, quantidade in ops_abertas_gerais:
+                if codigo not in codigos_existentes:
+                    ops_sem_definicao.append({
+                        "Num OP": numero,
+                        "Código": codigo,
+                        "Descrição": descricao,
+                        "Referência": referencia,
+                        "Unidade": unidade,
+                        "Tipo": tipo,
+                        "Quantidade": f'{quantidade:.2f}'
+                    })
+
+            if ops_sem_definicao:
+                produtos_por_servico["OPs Sem Definição"] = ops_sem_definicao
+
+            self.excel2(produtos_por_servico)
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def excel2(self, produtos_por_servico):
+        try:
+            import pandas as pd
+            from openpyxl import load_workbook
+            from openpyxl.styles import Border, Side
+            from openpyxl.utils import get_column_letter
+
+            borda_padrao = Border(
+                left=Side(border_style="thin"),
+                right=Side(border_style="thin"),
+                top=Side(border_style="thin"),
+                bottom=Side(border_style="thin")
+            )
+
+            planilhas_por_servico = {}
+
+            for servico, produtos in produtos_por_servico.items():
+                for p in produtos:
+                    if servico == "OPs Sem Definição":
+                        codigo = p.get("Código", "")
+                    else:
+                        try:
+                            codigo = int(p["codigo"])
+                        except (ValueError, TypeError, KeyError):
+                            codigo = p.get("codigo", "")
+
+                    if servico == "OPs Sem Definição":
+                        linha = {
+                            "Num OP": p.get("Num OP", ""),
+                            "Código": codigo,
+                            "Descrição": p.get("Descrição", ""),
+                            "Referência": p.get("Referência", ""),
+                            "Unidade": p.get("Unidade", ""),
+                            "Tipo": p.get("Tipo", ""),
+                            "Quantidade": p.get("Quantidade", "")
+                        }
+                        nome_aba = "OPs Sem Definição"
+                    elif not servico.strip():
+                        linha = {
+                            "Nível": p.get("pontos", ""),
+                            "Código": codigo,
+                            "Descrição": p.get("descricao", ""),
+                            "Referência": p.get("referencia", ""),
+                            "Unidade": p.get("unidade", ""),
+                            "Tipo": p.get("tipo_material", "")
+                        }
+                        nome_aba = "Itens Comprados"
+                    else:
+                        linha = {
+                            "Nível": p.get("pontos", ""),
+                            "Código": codigo,
+                            "Descrição": p.get("descricao", ""),
+                            "Referência": p.get("referencia", ""),
+                            "Unidade": p.get("unidade", ""),
+                            "Num OP": p.get("num_op", "")
+                        }
+                        nome_aba = servico.strip()[:31] or "Sem_Serviço"
+
+                    if nome_aba not in planilhas_por_servico:
+                        planilhas_por_servico[nome_aba] = []
+
+                    planilhas_por_servico[nome_aba].append(linha)
 
             desktop = Path.home() / "Desktop"
             desk_str = str(desktop)
-            nome_req = '\Material Pendente.xlsx'
-            caminho = (desk_str + nome_req)
+            nome_req = '\produtos_por_servico.xlsx'
+            caminho_arquivo = (desk_str + nome_req)
 
-            dados_extraidos = self.dados_previsao
-            if not dados_extraidos:
-                print(f'A Tabela "Lista de Materiais" está vazia!')
-            else:
-                self.excel_total(caminho, dados_extraidos)
+            with pd.ExcelWriter(caminho_arquivo, engine="openpyxl") as writer:
+                for aba, dados in planilhas_por_servico.items():
+                    df = pd.DataFrame(dados)
+                    if "Nível" in df.columns:
+                        df.sort_values(by="Nível", ascending=False, inplace=True)
+                    df.to_excel(writer, sheet_name=aba, index=False)
 
-                self.excel_pedido_interno(caminho)
+            wb = load_workbook(caminho_arquivo)
 
-                for dados_ex in dados_extraidos:
-                    nivel, cod, descr, ref, um, qtde, entrega, conj, cod_pai, pacote, num_pi = dados_ex
-                    qtde_float = valores_para_float(qtde)
-
-                    prod_acum_encont = False
-                    for nivel_e, cod_e, qtde_e, grade_ops_e in lista_acumulada:
-                        if cod_e == cod:
-                            prod_acum_encont = True
-                            break
-
-                    if prod_acum_encont:
-                        for i_ee, (nivel_ee, cod_ee, qtde_ee, grade_ops_ee) in enumerate(lista_acumulada):
-                            qtde_ee_float = valores_para_float(qtde_ee)
-
-                            if cod_ee == cod:
-                                nova_qtde = qtde_ee_float + qtde_float
-                                nova_grade_ops = f"{grade_ops_ee} // {cod_pai}({qtde})"
-                                lista_acumulada[i_ee] = (nivel, cod, nova_qtde, nova_grade_ops)
-                                break
-                    else:
-                        novo_saldo = qtde_float
-                        nova_grade = f"{cod_pai}({qtde})"
-                        lanca_saldo = (nivel, cod, novo_saldo, nova_grade)
-                        lista_acumulada.append(lanca_saldo)
-
-            if lista_acumulada:
-                for dedos in lista_acumulada:
-                    nivel_a, cod_a, qtde_a, grade = dedos
-
-                    cursor = conecta.cursor()
-                    cursor.execute(f"SELECT prod.id, prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
-                                   f"prod.unidade, prod.conjunto, tip.tipomaterial "
-                                   f"FROM produto as prod "
-                                   f"LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id "
-                                   f"where prod.codigo = {cod_a};")
-                    detalhes_produto = cursor.fetchall()
-                    id_prod, codis, descr, ref, um, conjunto, tipo = detalhes_produto[0]
-
-                    if conjunto != 10:
-                        dads_compr = (nivel_a, cod_a, descr, ref, um, qtde_a, tipo, grade)
-                        nova_lista_compras.append(dads_compr)
-                    else:
-                        dads_acab = (nivel_a, cod_a, descr, ref, um, qtde_a, tipo, grade)
-                        nova_lista_acabado.append(dads_acab)
-
-            if nova_lista_compras:
-                self.excel_comprado(caminho, nova_lista_compras)
-
-            if nova_lista_acabado:
-                self.excel_acabado(caminho, nova_lista_acabado)
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def excel_total(self, caminho, nova_tabela):
-        try:
-            lista_nova = []
-
-            for i in nova_tabela:
-                nivel, cod, descr, ref, um, qtde, entrega, conj, cod_pai, pacote, num_pi = i
-
-                cursor = conecta.cursor()
-                cursor.execute(f"SELECT prod.id, tip.tipomaterial "
-                               f"FROM produto as prod "
-                               f"LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id "
-                               f"where prod.codigo = {cod};")
-                detalhes_produto = cursor.fetchall()
-                tipo = detalhes_produto[0][1]
-
-                dados = (nivel, cod, descr, ref, um, qtde, entrega, conj, tipo, cod_pai, pacote, num_pi)
-                lista_nova.append(dados)
-
-            if lista_nova:
-                workbook = criar_workbook()
-                sheet = workbook.active
-                sheet.title = "Lista Completa"
-
-                headers = ["Nivel", "Código", "Descrição", "Referência", "UM", "Qtde", "Entrega", "Conjunto",
-                           "Tipo", "Origem", "Estrutura", "Nº PI"]
-                sheet.append(headers)
-
-                header_row = sheet[1]
-                for cell in header_row:
-                    edita_fonte(cell, negrito=True)
-                    edita_preenchimento(cell)
-                    edita_alinhamento(cell)
-
-                for d_ex in lista_nova:
-                    nivel_ex, cod_ex, de_ex, ref_ex, um_ex, qtde_ex, entr_ex, conj_ex, tipo_ex, cod_pai_ex, \
-                    pacote_ex, pi = d_ex
-
-                    nivius = int(nivel_ex)
-                    codigu = int(cod_ex)
-                    pi_int = int(pi)
-
-                    if cod_pai_ex:
-                        cod_pai_ex_int = int(cod_pai_ex)
-                    else:
-                        cod_pai_ex_int = 0
-
-                    if qtde_ex == "":
-                        qtde_e = 0.00
-                    else:
-                        qtde_e = float(qtde_ex)
-
-                    sheet.append([nivius, codigu, de_ex, ref_ex, um_ex, qtde_e, entr_ex, conj_ex, tipo_ex,
-                                  cod_pai_ex_int, pacote_ex, pi_int])
-
-                for row in sheet.iter_rows(min_row=1,
-                                           max_row=sheet.max_row,
-                                           min_col=1,
-                                           max_col=sheet.max_column):
+            for aba in wb.worksheets:
+                for row in aba.iter_rows(min_row=1, max_row=aba.max_row, min_col=1, max_col=aba.max_column):
                     for cell in row:
-                        edita_bordas(cell)
-                        edita_alinhamento(cell)
+                        cell.border = borda_padrao
 
-                for column in sheet.columns:
+                for col in aba.columns:
                     max_length = 0
-                    column_letter = letra_coluna(column[0].column)
-                    for cell in column:
-                        if isinstance(cell.value, (int, float)):
-                            cell_value_str = "{:.2f}".format(cell.value)
-                        else:
-                            cell_value_str = str(cell.value)
-                        if len(cell_value_str) > max_length:
-                            max_length = len(cell_value_str)
-
-                    adjusted_width = (max_length + 2)
-                    sheet.column_dimensions[column_letter].width = adjusted_width
-
-                for row in sheet.iter_rows(min_row=2,
-                                           max_row=sheet.max_row,
-                                           min_col=7,
-                                           max_col=9):
-                    for cell in row:
-                        cell.number_format = '0.00'
-
-                for linha in sheet.iter_rows(min_row=2,
-                                             max_row=sheet.max_row,
-                                             min_col=9,
-                                             max_col=9):
-                    for cell in linha:
-                        cell.number_format = '0'
-
-                workbook.save(caminho)
-
-                print("Excel Salvo!")
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def excel_pedido_interno(self, caminho_arquivo):
-        try:
-            workbook = carregar_workbook(caminho_arquivo)
-
-            planilha = workbook.create_sheet(title="Situação PI")
-
-            headers = ["Emissão", "Nº PI", "Código", "Descrição", "Referência", "UM", "Qtde", "Entrega", "Projeção",
-                       "Qtde Total", "Qtde Falta", "%"]
-            planilha.append(headers)
-
-            print("extrair_tabela(self.table_PI)")
-
-            dados_tabela = []
-
-            if dados_tabela:
-                for i in dados_tabela:
-                    num_pi, codigo, descr, ref, um, qtde, limite, projecao, contagem = i
-
-                    cursor = conecta.cursor()
-                    cursor.execute(f"SELECT ped.emissao, prod.id, prodint.qtde, prodint.data_previsao "
-                                   f"FROM PRODUTOPEDIDOINTERNO as prodint "
-                                   f"INNER JOIN produto as prod ON prodint.id_produto = prod.id "
-                                   f"INNER JOIN pedidointerno as ped ON prodint.id_pedidointerno = ped.id "
-                                   f"INNER JOIN clientes as cli ON ped.id_cliente = cli.id "
-                                   f"where prodint.status = 'A' "
-                                   f"and prodint.id_pedidointerno = {num_pi} "
-                                   f"and prod.codigo = {codigo};")
-                    dados_interno = cursor.fetchall()
-                    if dados_interno:
-                        emissao = dados_interno[0][0]
-                        emi = emissao.strftime('%d/%m/%Y')
-
-                        entrega = dados_interno[0][3]
-                        ent = entrega.strftime('%d/%m/%Y')
-
-                        id_prod = dados_interno[0][1]
-
-                        num_pi_int = int(num_pi)
-                        codigo_int = int(codigo)
-                        contagem_int = int(contagem)
-
-                        if qtde == "":
-                            qtde_float = 0.00
-                        else:
-                            qtde_float = float(qtde)
-
-                        cursor = conecta.cursor()
-                        cursor.execute(f"SELECT produto, qtde_itens FROM RESUMO_ESTRUTURA where produto = {id_prod};")
-                        detalhes_resumo = cursor.fetchall()
-                        if detalhes_resumo:
-                            total_itens = int(detalhes_resumo[0][1])
-                        else:
-                            total_itens = 0
-
-                        if total_itens:
-                            porcentagem = ((total_itens - contagem_int) / total_itens) * 100
-                        else:
-                            porcentagem = 0
-
-                        porc_int = int(porcentagem)
-
-                        planilha.append([emi, num_pi_int, codigo_int, descr, ref, um, qtde_float,
-                                         ent, projecao, total_itens, contagem_int, porc_int])
-
-                        for linha in planilha.iter_rows(min_row=1, max_row=1):
-                            for cell in linha:
-                                edita_fonte(cell, negrito=True)
-                                edita_preenchimento(cell)
-                                edita_alinhamento(cell)
-
-                        for linha in planilha.iter_rows(min_row=1,
-                                                        max_row=planilha.max_row,
-                                                        min_col=1,
-                                                        max_col=planilha.max_column):
-                            for cell in linha:
-                                edita_bordas(cell)
-                                edita_alinhamento(cell)
-
-                        for coluna in planilha.columns:
-                            max_length = 0
-                            for cell in coluna:
-                                if isinstance(cell.value, (int, float)):
-                                    cell_value_str = "{:.2f}".format(cell.value)
-                                else:
-                                    cell_value_str = str(cell.value)
-                                if len(cell_value_str) > max_length:
-                                    max_length = len(cell_value_str)
-
-                            adjusted_width = (max_length + 2)
-                            ajusta_larg_coluna(planilha, coluna, adjusted_width)
-
-                        for linha in planilha.iter_rows(min_row=2,
-                                                        max_row=planilha.max_row,
-                                                        min_col=7,
-                                                        max_col=9):
-                            for cell in linha:
-                                cell.number_format = '0.00'
-
-                        for linha in planilha.iter_rows(min_row=2,
-                                                        max_row=planilha.max_row,
-                                                        min_col=9,
-                                                        max_col=9):
-                            for cell in linha:
-                                cell.number_format = '0'
-
-            workbook.save(caminho_arquivo)
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def excel_comprado(self, caminho_arquivo, nova_tabela):
-        try:
-            workbook = carregar_workbook(caminho_arquivo)
-
-            planilha = workbook.create_sheet(title="Comprado")
-
-            headers = ["Nivel", "Código", "Descrição", "Referência", "UM", "Qtde", "Tipo", "Grade"]
-            planilha.append(headers)
-
-            regex = re.compile(r"(\d+)?\((\d+\.\d+)\)")
-
-            for dados_ex in nova_tabela:
-                nivel, cod, descr, ref, um, qtde, tipo, grade = dados_ex
-
-                matches = regex.findall(grade)
-                codigos = [match[0] for match in matches if match[0]]
-
-                grade_final = ""
-
-                for codigo in codigos:
-                    cursor = conecta.cursor()
-                    cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') "
-                                   f"FROM produto as prod "
-                                   f"LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id "
-                                   f"where prod.codigo = {codigo};")
-                    detalhes_pai = cursor.fetchall()
-                    codi, descri, refi = detalhes_pai[0]
-
-                    grade_final += f"{codi} - {descri} - {refi} "
-
-                nivius = int(nivel)
-                codigu = int(cod)
-
-                if qtde == "":
-                    qtde_e = 0.00
-                else:
-                    qtde_e = float(qtde)
-
-                planilha.append([nivius, codigu, descr, ref, um, qtde_e, tipo, grade_final])
-
-            for linha in planilha.iter_rows(min_row=1, max_row=1):
-                for cell in linha:
-                    edita_fonte(cell, negrito=True)
-                    edita_preenchimento(cell)
-                    edita_alinhamento(cell)
-
-            for linha in planilha.iter_rows(min_row=1, max_row=planilha.max_row, min_col=1,
-                                            max_col=planilha.max_column):
-                for cell in linha:
-                    edita_bordas(cell)
-                    edita_alinhamento(cell)
-
-            for coluna in planilha.columns:
-                max_length = 0
-                for cell in coluna:
-                    if isinstance(cell.value, (int, float)):
-                        cell_value_str = "{:.2f}".format(cell.value)
-                    else:
-                        cell_value_str = str(cell.value)
-                    if len(cell_value_str) > max_length:
-                        max_length = len(cell_value_str)
-
-                adjusted_width = (max_length + 2)
-                ajusta_larg_coluna(planilha, coluna, adjusted_width)
-
-            for linha in planilha.iter_rows(min_row=2, max_row=planilha.max_row, min_col=7,
-                                            max_col=9):
-                for cell in linha:
-                    cell.number_format = '0.00'
-
-            workbook.save(caminho_arquivo)
-            print("Excel Salvo!")
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def excel_acabado(self, caminho_arquivo, nova_tabela):
-        try:
-            lista_nova = []
-
-            for i in nova_tabela:
-                nivel, cod, descr, ref, um, qtde, tipo, grade = i
-                dados_op = self.manipula_dados_tabela_producao(cod)
-
-                if not dados_op:
-                    dados = (nivel, cod, descr, ref, um, qtde, tipo, grade)
-                    lista_nova.append(dados)
-
-            if lista_nova:
-                workbook = carregar_workbook(caminho_arquivo)
-                planilha = workbook.create_sheet(title="Acabado_sem_op")
-
-                headers = ["Nivel", "Código", "Descrição", "Referência", "UM", "Qtde", "Tipo", "Grade"]
-                planilha.append(headers)
-
-                header_row = planilha[1]
-                for cell in header_row:
-                    edita_fonte(cell, negrito=True)
-                    edita_preenchimento(cell)
-                    edita_alinhamento(cell)
-
-                regex = re.compile(r"(\d+)?\((\d+\.\d+)\)")
-
-                for dados_ex in lista_nova:
-                    nivel, cod, descr, ref, um, qtde, tipo, grade = dados_ex
-
-                    matches = regex.findall(grade)
-                    codigos = [match[0] for match in matches if match[0]]
-
-                    grade_final = ""
-
-                    for codigo in codigos:
-                        cursor = conecta.cursor()
-                        cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') "
-                                       f"FROM produto as prod "
-                                       f"LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id "
-                                       f"where prod.codigo = {codigo};")
-                        detalhes_pai = cursor.fetchall()
-                        codi, descri, refi = detalhes_pai[0]
-
-                        grade_final += f"{codi} - {descri} - {refi} "
-
-                    nivius = int(nivel)
-                    codigu = int(cod)
-
-                    if qtde == "":
-                        qtde_e = 0.00
-                    else:
-                        qtde_e = float(qtde)
-
-                    planilha.append([nivius, codigu, descr, ref, um, qtde_e, tipo, grade_final])
-
-                for row in planilha.iter_rows(min_row=1, max_row=planilha.max_row, min_col=1,
-                                              max_col=planilha.max_column):
-                    for cell in row:
-                        edita_bordas(cell)
-                        edita_alinhamento(cell)
-
-                for column in planilha.columns:
-                    max_length = 0
-                    column_letter = letra_coluna(column[0].column)
-                    for cell in column:
-                        if isinstance(cell.value, (int, float)):
-                            cell_value_str = "{:.2f}".format(cell.value)
-                        else:
-                            cell_value_str = str(cell.value)
-                        if len(cell_value_str) > max_length:
-                            max_length = len(cell_value_str)
-
-                    adjusted_width = (max_length + 2)
-                    planilha.column_dimensions[column_letter].width = adjusted_width
-
-                for row in planilha.iter_rows(min_row=2, max_row=planilha.max_row, min_col=7, max_col=9):
-                    for cell in row:
-                        cell.number_format = '0.00'
-
-                workbook.save(caminho_arquivo)
-
-                print("Excel Salvo!")
+                    column = col[0].column_letter
+                    for cell in col:
+                        valor = str(cell.value) if cell.value is not None else ""
+                        if len(valor) > max_length:
+                            max_length = len(valor)
+                    aba.column_dimensions[column].width = max_length + 2
+
+            wb.save(caminho_arquivo)
+            print(f"✅ Arquivo '{caminho_arquivo}' criado com sucesso!")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
