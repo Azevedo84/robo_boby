@@ -7,7 +7,6 @@ import inspect
 import os
 import math
 import traceback
-from pathlib import Path
 
 
 class TelaPcpPrevisaoV2:
@@ -515,6 +514,9 @@ class TelaPcpPrevisaoV2:
             pontos, nivel, codigos, qtdei, cod_or, descr_or, lista_saldos, lista_ops, lista_ocs, cod_fat, \
             num_pi, pacote = dados_total
 
+            if codigos == "21542":
+                print(pontos, nivel, codigos, qtdei, cod_or, descr_or)
+
             cursor = conecta.cursor()
             cursor.execute(f"SELECT prod.id, prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
                            f"prod.unidade, prod.quantidade, tip.tipomaterial, prod.id_versao "
@@ -524,7 +526,8 @@ class TelaPcpPrevisaoV2:
             detalhes_pai = cursor.fetchall()
             id_pai, cod_pai, descr_pai, ref_pai, um_pai, saldo, tipo, id_estrut = detalhes_pai[0]
 
-            print(cod_pai, descr_pai, ref_pai, um_pai)
+            if codigos == "21542":
+                print(detalhes_pai[0])
 
             qtdei_float = valores_para_float(qtdei)
             saldo_float = valores_para_float(saldo)
@@ -553,7 +556,12 @@ class TelaPcpPrevisaoV2:
                 lanca_saldo = (cod_pai, novo_saldo)
                 lista_saldos.append(lanca_saldo)
 
+            if codigos == "21542":
+                print(novo_saldo, qtde_flt_c_oc)
+
             if novo_saldo < 0 < qtde_flt_c_oc:
+                if codigos == "21542":
+                    print("entrou")
                 coco = novo_saldo + qtde_flt_c_oc
                 if coco > 0:
                     nova_qtde = novo_saldo * -1
@@ -761,6 +769,9 @@ class TelaPcpPrevisaoV2:
                     else:
                         conj = "MATERIA-PRIMA"
 
+                    if codis == "21542":
+                        print(pontos, codis, descr, ref, um, qtde, entrega, conj, cod_pai, pacote, num_pi)
+
                     dados = (pontos, codis, descr, ref, um, qtde, entrega, conj, cod_pai, pacote, num_pi)
                     tabela_nova.append(dados)
 
@@ -770,7 +781,6 @@ class TelaPcpPrevisaoV2:
             if tabela_nova:
                 self.calculo_7_manipula_previsao_pi(tabela_p_pi)
 
-                print("lança tabela previsão", tabela_nova)
                 self.dados_previsao = tabela_nova
 
         except Exception as e:
@@ -917,6 +927,7 @@ class TelaPcpPrevisaoV2:
                     WHERE op.status = 'A' AND prod.codigo = '{codis}';
                 """)
                 ops_abertas = cursor.fetchall()
+                id_estrut = ops_abertas[0][2] if ops_abertas else ""
                 num_op = ops_abertas[0][0] if ops_abertas else ""
 
                 produto_info = {
@@ -931,14 +942,17 @@ class TelaPcpPrevisaoV2:
                     "cod_pai": cod_pai,
                     "pacote": pacote,
                     "pi": num_pi,
-                    "num_op": num_op
+                    "num_op": num_op,
+                    "id_estrut": id_estrut,
                 }
+
+                if codis == "21542":
+                    print(produto_info)
 
                 if servico not in produtos_por_servico:
                     produtos_por_servico[servico] = []
                 produtos_por_servico[servico].append(produto_info)
 
-            # NOVA LÓGICA: verificar OPs não incluídas
             codigos_existentes = set()
             for produtos in produtos_por_servico.values():
                 for p in produtos:
@@ -970,12 +984,109 @@ class TelaPcpPrevisaoV2:
             if ops_sem_definicao:
                 produtos_por_servico["OPs Sem Definição"] = ops_sem_definicao
 
-            self.excel2(produtos_por_servico)
+            nova_lista_produtos, produtos_sem_op = self.separar_dados_select(produtos_por_servico)
+
+            self.excel2(nova_lista_produtos)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def select_mistura(self, num_op, id_estrut):
+        try:
+            dados_tabela_estrut = []
+            dados_tabela_consumo = []
+
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT estprod.id, prod.codigo, prod.descricao, "
+                           f"COALESCE(prod.obs, '') as obs, prod.unidade, "
+                           f"((SELECT quantidade FROM ordemservico where numero = {num_op}) * "
+                           f"(estprod.quantidade)) AS Qtde, "
+                           f"COALESCE(prod.localizacao, ''), prod.quantidade "
+                           f"FROM estrutura_produto as estprod "
+                           f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                           f"where estprod.id_estrutura = {id_estrut} ORDER BY prod.descricao;")
+            select_estrut = cursor.fetchall()
+
+            for dados_estrut in select_estrut:
+                id_mat_e, cod_e, descr_e, ref_e, um_e, qtde_e, local_e, saldo_e = dados_estrut
+
+                dados = (id_mat_e, cod_e, descr_e, ref_e, um_e, qtde_e, local_e, saldo_e)
+                dados_tabela_estrut.append(dados)
+
+                cursor = conecta.cursor()
+                cursor.execute(f"SELECT max(estprod.id), max(prod.codigo), max(prod.descricao), "
+                               f"sum(prodser.QTDE_ESTRUT_PROD) as total "
+                               f"FROM estrutura_produto as estprod "
+                               f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                               f"INNER JOIN produtoos as prodser ON estprod.id = prodser.id_estrut_prod "
+                               f"where prodser.numero = {num_op} and estprod.id = {id_mat_e} "
+                               f"group by prodser.id_estrut_prod;")
+                select_os_resumo = cursor.fetchall()
+
+                if select_os_resumo:
+                    cursor = conecta.cursor()
+                    cursor.execute(f"select prodser.id_estrut_prod, "
+                                   f"COALESCE((extract(day from prodser.data)||'/'||"
+                                   f"extract(month from prodser.data)||'/'||"
+                                   f"extract(year from prodser.data)), '') AS DATA, prod.codigo, prod.descricao, "
+                                   f"COALESCE(prod.obs, '') as obs, prod.unidade, "
+                                   f"prodser.quantidade, prodser.qtde_estrut_prod "
+                                   f"from produtoos as prodser "
+                                   f"INNER JOIN produto as prod ON prodser.produto = prod.id "
+                                   f"where prodser.numero = {num_op} and prodser.id_estrut_prod = {id_mat_e};")
+                    select_os = cursor.fetchall()
+
+                    for dados_os in select_os:
+                        id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
+
+                        dados2 = (data_os, cod_os, descr_os, ref_os, um_os, qtde_os)
+                        dados_tabela_consumo.append(dados2)
+
+            return dados_tabela_estrut, dados_tabela_consumo
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
+
+    def separar_dados_select(self, produtos_por_servico):
+        try:
+            produtos_filtrados = {}
+            produtos_sem_op = []
+
+            for servico, lista_produtos in produtos_por_servico.items():
+                if servico == "OPs Sem Definição":
+                    produtos_filtrados[servico] = lista_produtos
+                    continue
+
+                for produto in lista_produtos:
+                    num_op = produto.get("num_op")
+                    id_estrut = produto.get("id_estrut")
+
+                    if num_op:
+                        tabela_estrutura, tabela_consumo_os = self.select_mistura(num_op, id_estrut)
+
+                        qtde_itens_estrut = len(tabela_estrutura)
+                        qtde_itens_op = len(tabela_consumo_os)
+
+                        if qtde_itens_estrut and qtde_itens_estrut == qtde_itens_op:
+                            if servico not in produtos_filtrados:
+                                produtos_filtrados[servico] = []
+                            produtos_filtrados[servico].append(produto)
+
+                    else:
+                        produtos_sem_op.append(produto)
+
+            return produtos_filtrados, produtos_sem_op
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def excel2(self, produtos_por_servico):
         try:
@@ -983,6 +1094,7 @@ class TelaPcpPrevisaoV2:
             from openpyxl import load_workbook
             from openpyxl.styles import Border, Side
             from openpyxl.utils import get_column_letter
+            from pathlib import Path
 
             borda_padrao = Border(
                 left=Side(border_style="thin"),
@@ -1026,12 +1138,12 @@ class TelaPcpPrevisaoV2:
                         nome_aba = "Itens Comprados"
                     else:
                         linha = {
-                            "Nível": p.get("pontos", ""),
+                            "Num OP": p.get("num_op", ""),
                             "Código": codigo,
                             "Descrição": p.get("descricao", ""),
                             "Referência": p.get("referencia", ""),
                             "Unidade": p.get("unidade", ""),
-                            "Num OP": p.get("num_op", "")
+                            "Nível": p.get("pontos", "")
                         }
                         nome_aba = servico.strip()[:31] or "Sem_Serviço"
 
@@ -1041,9 +1153,7 @@ class TelaPcpPrevisaoV2:
                     planilhas_por_servico[nome_aba].append(linha)
 
             desktop = Path.home() / "Desktop"
-            desk_str = str(desktop)
-            nome_req = '\produtos_por_servico.xlsx'
-            caminho_arquivo = (desk_str + nome_req)
+            caminho_arquivo = desktop / "Produto por Serviço.xlsx"
 
             with pd.ExcelWriter(caminho_arquivo, engine="openpyxl") as writer:
                 for aba, dados in planilhas_por_servico.items():
@@ -1061,7 +1171,7 @@ class TelaPcpPrevisaoV2:
 
                 for col in aba.columns:
                     max_length = 0
-                    column = col[0].column_letter
+                    column = get_column_letter(col[0].column)
                     for cell in col:
                         valor = str(cell.value) if cell.value is not None else ""
                         if len(valor) > max_length:
@@ -1069,7 +1179,6 @@ class TelaPcpPrevisaoV2:
                     aba.column_dimensions[column].width = max_length + 2
 
             wb.save(caminho_arquivo)
-            print(f"✅ Arquivo '{caminho_arquivo}' criado com sucesso!")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
