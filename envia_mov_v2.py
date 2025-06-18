@@ -768,15 +768,16 @@ class EnviaMovimentacao:
                     for col in columns:
                         mp_copy.cell(row, col).alignment = Alignment(horizontal='center', vertical='center',
                                                                      wrap_text=True)
-                        mp_copy.cell(row, col).border = Border(left=Side(border_style='thin', color='00000000'),
-                                                               right=Side(border_style='thin', color='00000000'),
-                                                               top=Side(border_style='thin', color='00000000'),
-                                                               bottom=Side(border_style='thin', color='00000000'),
-                                                               diagonal=Side(border_style='thick', color='00000000'),
-                                                               diagonal_direction=0,
-                                                               outline=Side(border_style='thin', color='00000000'),
-                                                               vertical=Side(border_style='thin', color='00000000'),
-                                                               horizontal=Side(border_style='thin', color='00000000'))
+                        mp_copy.cell(row, col).border = Border(
+                            left=Side(border_style='thin', color='00000000'),
+                            right=Side(border_style='thin', color='00000000'),
+                            top=Side(border_style='thin', color='00000000'),
+                            bottom=Side(border_style='thin', color='00000000'),
+                            diagonal=Side(border_style='thick', color='00000000'),
+                            diagonal_direction=0,
+                            vertical=Side(border_style='thin', color='00000000'),
+                            horizontal=Side(border_style='thin', color='00000000')
+                        )
 
                 inicia1 = 14
                 rows1 = range(inicia1, inicia1 + linhas_frame1)
@@ -786,15 +787,16 @@ class EnviaMovimentacao:
                     for col1 in columns1:
                         mp_copy.cell(row1, col1).alignment = Alignment(horizontal='center', vertical='center',
                                                                        wrap_text=True)
-                        mp_copy.cell(row1, col1).border = Border(left=Side(border_style='thin', color='00000000'),
-                                                                 right=Side(border_style='thin', color='00000000'),
-                                                                 top=Side(border_style='thin', color='00000000'),
-                                                                 bottom=Side(border_style='thin', color='00000000'),
-                                                                 diagonal=Side(border_style='thick', color='00000000'),
-                                                                 diagonal_direction=0,
-                                                                 outline=Side(border_style='thin', color='00000000'),
-                                                                 vertical=Side(border_style='thin', color='00000000'),
-                                                                 horizontal=Side(border_style='thin', color='00000000'))
+                        mp_copy.cell(row1, col1).border = Border(
+                            left=Side(border_style='thin', color='00000000'),
+                            right=Side(border_style='thin', color='00000000'),
+                            top=Side(border_style='thin', color='00000000'),
+                            bottom=Side(border_style='thin', color='00000000'),
+                            diagonal=Side(border_style='thick', color='00000000'),
+                            diagonal_direction=0,
+                            vertical=Side(border_style='thin', color='00000000'),
+                            horizontal=Side(border_style='thin', color='00000000')
+                        )
 
                 inicia2 = 14
                 rows2 = range(inicia2, inicia2 + linhas_frame2)
@@ -805,15 +807,16 @@ class EnviaMovimentacao:
                     for col2 in columns2:
                         mp_copy.cell(row2, col2).alignment = Alignment(horizontal='center', vertical='center',
                                                                        wrap_text=True)
-                        mp_copy.cell(row2, col2).border = Border(left=Side(border_style='thin', color='00000000'),
-                                                                 right=Side(border_style='thin', color='00000000'),
-                                                                 top=Side(border_style='thin', color='00000000'),
-                                                                 bottom=Side(border_style='thin', color='00000000'),
-                                                                 diagonal=Side(border_style='thick', color='00000000'),
-                                                                 diagonal_direction=0,
-                                                                 outline=Side(border_style='thin', color='00000000'),
-                                                                 vertical=Side(border_style='thin', color='00000000'),
-                                                                 horizontal=Side(border_style='thin', color='00000000'))
+                        mp_copy.cell(row2, col2).border = Border(
+                            left=Side(border_style='thin', color='00000000'),
+                            right=Side(border_style='thin', color='00000000'),
+                            top=Side(border_style='thin', color='00000000'),
+                            bottom=Side(border_style='thin', color='00000000'),
+                            diagonal=Side(border_style='thick', color='00000000'),
+                            diagonal_direction=0,
+                            vertical=Side(border_style='thin', color='00000000'),
+                            horizontal=Side(border_style='thin', color='00000000')
+                        )
 
                 inicia3 = 14
                 rows3 = range(inicia3, inicia3 + linhas_frame3)
@@ -825,15 +828,16 @@ class EnviaMovimentacao:
                     for col3 in columns3:
                         mp_copy.cell(row3, col3).alignment = Alignment(horizontal='center', vertical='center',
                                                                        wrap_text=True)
-                        mp_copy.cell(row3, col3).border = Border(left=Side(border_style='thin', color='00000000'),
-                                                                 right=Side(border_style='thin', color='00000000'),
-                                                                 top=Side(border_style='thin', color='00000000'),
-                                                                 bottom=Side(border_style='thin', color='00000000'),
-                                                                 diagonal=Side(border_style='thick', color='00000000'),
-                                                                 diagonal_direction=0,
-                                                                 outline=Side(border_style='thin', color='00000000'),
-                                                                 vertical=Side(border_style='thin', color='00000000'),
-                                                                 horizontal=Side(border_style='thin', color='00000000'))
+                        mp_copy.cell(row3, col3).border = Border(
+                            left=Side(border_style='thin', color='00000000'),
+                            right=Side(border_style='thin', color='00000000'),
+                            top=Side(border_style='thin', color='00000000'),
+                            bottom=Side(border_style='thin', color='00000000'),
+                            diagonal=Side(border_style='thick', color='00000000'),
+                            diagonal_direction=0,
+                            vertical=Side(border_style='thin', color='00000000'),
+                            horizontal=Side(border_style='thin', color='00000000')
+                        )
 
                 lanca_dados_coluna("D6", data, 16, True)
                 lanca_dados_mesclado('M4:N4', 'M4', op_int, 18, True)
@@ -916,15 +920,16 @@ class EnviaMovimentacao:
                 for col in columns:
                     ws.cell(row, col).alignment = Alignment(horizontal='center', vertical='center',
                                                             wrap_text=True)
-                    ws.cell(row, col).border = Border(left=Side(border_style='thin', color='00000000'),
-                                                      right=Side(border_style='thin', color='00000000'),
-                                                      top=Side(border_style='thin', color='00000000'),
-                                                      bottom=Side(border_style='thin', color='00000000'),
-                                                      diagonal=Side(border_style='thick', color='00000000'),
-                                                      diagonal_direction=0,
-                                                      outline=Side(border_style='thin', color='00000000'),
-                                                      vertical=Side(border_style='thin', color='00000000'),
-                                                      horizontal=Side(border_style='thin', color='00000000'))
+                    ws.cell(row, col).border = Border(
+                        left=Side(border_style='thin', color='00000000'),
+                        right=Side(border_style='thin', color='00000000'),
+                        top=Side(border_style='thin', color='00000000'),
+                        bottom=Side(border_style='thin', color='00000000'),
+                        diagonal=Side(border_style='thick', color='00000000'),
+                        diagonal_direction=0,
+                        vertical=Side(border_style='thin', color='00000000'),
+                        horizontal=Side(border_style='thin', color='00000000')
+                    )
 
             # para escrever só os valores em um lugar específico:
             df.to_excel(writer, sheet_name=aba_sheet, startrow=5, startcol=0, header=False, index=False)

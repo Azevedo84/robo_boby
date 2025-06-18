@@ -89,6 +89,7 @@ def valores_para_virgula(string):
         nome_funcao = inspect.currentframe().f_code.co_name
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        return None
 
 
 def float_para_moeda_reais(valor):
@@ -105,6 +106,7 @@ def float_para_moeda_reais(valor):
         nome_funcao = inspect.currentframe().f_code.co_name
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        return None
 
 
 def float_para_porcentagem(valor):
@@ -122,6 +124,7 @@ def float_para_porcentagem(valor):
         nome_funcao = inspect.currentframe().f_code.co_name
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        return None
 
 
 def moeda_reais_para_float(valor_moeda):
@@ -138,6 +141,7 @@ def moeda_reais_para_float(valor_moeda):
         nome_funcao = inspect.currentframe().f_code.co_name
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        return None
 
 
 def float_para_virgula(valor_float):
@@ -161,6 +165,7 @@ def float_para_virgula(valor_float):
         nome_funcao = inspect.currentframe().f_code.co_name
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        return None
 
 
 def timestamp_brasileiro(data_e_tempo):
@@ -176,3 +181,4 @@ def timestamp_brasileiro(data_e_tempo):
         nome_funcao = inspect.currentframe().f_code.co_name
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        return None

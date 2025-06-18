@@ -54,6 +54,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def teste(self, id_mat_e, lista_substitutos, num_op):
         try:
@@ -111,6 +112,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def consumo_op_por_id(self, num_op, id_materia_prima):
         try:
@@ -128,6 +130,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def verifica_ops_concluidas(self, num_op, id_estrut, cod_pai, descr_pai):
         try:
@@ -173,6 +176,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def gerar_excel(self, material_faltando):
         try:
@@ -344,6 +348,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def retorna_ops_abertas(self, cod_prod):
         try:
@@ -370,6 +375,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def retorna_materia_prima_industrializacao(self, cod_prod):
         try:
@@ -408,6 +414,7 @@ class EnviaOrdensProducao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
 
 chama_classe = EnviaOrdensProducao()

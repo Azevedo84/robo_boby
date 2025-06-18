@@ -7,9 +7,9 @@ conecta = fdb.connect(database=r'C:\HallSys\db\Horus\Suzuki\ESTOQUE.GDB',
                       password='masterkey',
                       charset='ANSI')
 
-cod_pai = "18061"
-cod_filho = "17340"
-cod_subs = "21700"
+cod_pai = "20676"
+cod_filho = "20673"
+cod_subs = "21781"
 
 num_op = ""
 

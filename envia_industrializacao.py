@@ -256,8 +256,8 @@ class EnviaIndustrializacao:
                         for ii in dados_mov:
                             cod, descr, ref, um, local, saldo = ii
 
-                            if cod == "21564":
-                                print(cod, descr)
+                            if cod == "17814":
+                                print("flor", id_mov, cod, descr)
 
                             prod_saldo_encontrado = False
                             for cod_sal_e, descr_e in lista_produtos:
@@ -273,7 +273,7 @@ class EnviaIndustrializacao:
                                     if dados_colhidos:
                                         dados = (cod, descr)
 
-                                        if cod == "21564":
+                                        if cod == "17814":
                                             print("aaaaa", dados_colhidos)
 
                                         lista_produtos.append(dados)
@@ -283,7 +283,7 @@ class EnviaIndustrializacao:
                                                     f"where id_envia_mov = {id_mov} and cod_prod = {cod};")
                                         dados_salvos = cur.fetchall()
 
-                                        if cod == "21564":
+                                        if cod == "17814":
                                             print("bbbbb", dados_salvos)
 
                                         if not dados_salvos:
@@ -294,10 +294,10 @@ class EnviaIndustrializacao:
                                             lista_banco.append(dadosss)
 
             if lista_final:
-                caminho = fr'C:\Users\Anderson\PycharmProjects\robo_boby\Listagem - Ind.pdf'
-                arquivo = f'Listagem - ind.pdf'
+                arquivo = 'Listagem - Ind.pdf'
+                caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), arquivo)
 
-                self.gerar_pdf_listagem_separar(arquivo, lista_final)
+                self.gerar_pdf_listagem_separar(caminho, lista_final)
                 self.inserir_no_banco(lista_banco)
                 self.envia_email(caminho, arquivo)
                 self.excluir_arquivo(arquivo)
@@ -320,7 +320,7 @@ class EnviaIndustrializacao:
             for i in tabela_estrutura:
                 ides_mat, id_estrutura, qtde = i
 
-                if cod_prod == "21564":
+                if cod_prod == "17814":
                     print("1", i)
 
                 cursor = conecta.cursor()
@@ -330,7 +330,7 @@ class EnviaIndustrializacao:
                 produto_pai = cursor.fetchall()
                 if produto_pai:
 
-                    if cod_prod == "21564":
+                    if cod_prod == "17814":
                         print("2", produto_pai)
 
                     cod_produto = produto_pai[0][1]
@@ -344,7 +344,7 @@ class EnviaIndustrializacao:
                     select_prod = cursor.fetchall()
 
                     if select_prod:
-                        if cod_prod == "21564":
+                        if cod_prod == "17814":
                             print("3", select_prod)
                         cod, descr, ref, um, obs = select_prod[0]
                         dados = (cod, descr, ref, um, qtde)
