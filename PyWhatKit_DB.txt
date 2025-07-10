@@ -1,0 +1,5 @@
+Date: 26/6/2025
+Time: 10:9
+Phone Number: +5551981158315
+Message: Oi! Mensagem enviada imediatamente pelo Python.
+--------------------

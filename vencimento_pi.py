@@ -26,7 +26,6 @@ class VencimentoPI:
             tab_ord_vencido = sorted(dados_vencidos, key=lambda x: x[6])
             self.envia_email_vencido(tab_ord_vencido)
 
-
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
             tb = traceback.extract_tb(excecao)

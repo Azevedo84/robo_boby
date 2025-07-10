@@ -114,6 +114,20 @@ class EnviaIndustrializacao:
                                     topMargin=margem_superior,
                                     bottomMargin=margem_inferior)
 
+            titulo = ['INDÚSTRIALIZAÇÃO']
+            style_lista = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.gray),
+                                      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                                      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                                      ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                                      ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                                      ('FONTSIZE', (0, 0), (-1, 0), 10),
+                                      ('FONTSIZE', (0, 1), (-1, -1), 8)])
+
+            table = Table([titulo])
+            table.setStyle(style_lista)
+            elements = [table]
+
             cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'SALDO']
             elem_lista = self.adicionar_tabelas_listagem(lista_final, cabecalho_lista)
 
@@ -135,7 +149,7 @@ class EnviaIndustrializacao:
             tabela_medida_motorista = Table([[elem_transp, elem_medida, elem_motorista]],
                                             colWidths=[170, 170])  # Ajuste as larguras conforme necessário
 
-            elementos = (elem_lista + [espaco_em_branco] +
+            elementos = (elements + [espaco_em_branco] + elem_lista + [espaco_em_branco] +
                          [tabela_medida_motorista])  # Adiciona a tabela com medidas e motorista lado a lado
 
             doc.build(elementos)

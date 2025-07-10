@@ -897,6 +897,7 @@ class TelaPcpPrevisaoV2:
                 resultado.append(tuple(item))
 
             produtos_por_servico = {}
+            produtos_sem_ops = {}
 
             for linha in resultado:
                 pontos, codis, descr, ref, um, qtde, entrega, conj, cod_pai, pacote, num_pi = linha
@@ -927,36 +928,67 @@ class TelaPcpPrevisaoV2:
                     WHERE op.status = 'A' AND prod.codigo = '{codis}';
                 """)
                 ops_abertas = cursor.fetchall()
-                id_estrut = ops_abertas[0][2] if ops_abertas else ""
-                num_op = ops_abertas[0][0] if ops_abertas else ""
 
-                produto_info = {
-                    "pontos": pontos,
-                    "codigo": codis,
-                    "descricao": descr,
-                    "referencia": ref,
-                    "unidade": um,
-                    "tipo_material": tipo,
-                    "quantidade": qtde,
-                    "conjunto": conj,
-                    "cod_pai": cod_pai,
-                    "pacote": pacote,
-                    "pi": num_pi,
-                    "num_op": num_op,
-                    "id_estrut": id_estrut,
-                }
+                produto_info_op = {}
+                produto_info_sem_op = {}
 
-                if codis == "21542":
-                    print(produto_info)
+                if ops_abertas:
+                    id_estrut = ops_abertas[0][2]
+                    num_op = ops_abertas[0][0]
+
+                    produto_info_op = {
+                        "pontos": pontos,
+                        "codigo": codis,
+                        "descricao": descr,
+                        "referencia": ref,
+                        "unidade": um,
+                        "tipo_material": tipo,
+                        "quantidade": qtde,
+                        "conjunto": conj,
+                        "cod_pai": cod_pai,
+                        "pacote": pacote,
+                        "pi": num_pi,
+                        "num_op": num_op,
+                        "id_estrut": id_estrut,
+                    }
+                else:
+                    id_estrut = ""
+                    num_op = ""
+
+                    produto_info_sem_op = {
+                        "pontos": pontos,
+                        "codigo": codis,
+                        "descricao": descr,
+                        "referencia": ref,
+                        "unidade": um,
+                        "tipo_material": tipo,
+                        "quantidade": qtde,
+                        "conjunto": conj,
+                        "cod_pai": cod_pai,
+                        "pacote": pacote,
+                        "pi": num_pi,
+                        "num_op": num_op,
+                        "id_estrut": id_estrut,
+                    }
 
                 if servico not in produtos_por_servico:
                     produtos_por_servico[servico] = []
-                produtos_por_servico[servico].append(produto_info)
+                produtos_por_servico[servico].append(produto_info_op)
+
+                if not ops_abertas:
+                    if servico not in produtos_sem_ops:
+                        produtos_sem_ops[servico] = []
+                    produtos_sem_ops[servico].append(produto_info_sem_op)
 
             codigos_existentes = set()
-            for produtos in produtos_por_servico.values():
+            for servico, produtos in produtos_por_servico.items():
+                # Ignorar a aba "OPs Sem Definição" porque ela usa "Código" com C maiúsculo
+                if servico == "OPs Sem Definição":
+                    continue
                 for p in produtos:
-                    codigos_existentes.add(p["codigo"])
+                    codigo = p.get("codigo")
+                    if codigo:
+                        codigos_existentes.add(codigo)
 
             cursor = conecta.cursor()
             cursor.execute("""
@@ -984,9 +1016,9 @@ class TelaPcpPrevisaoV2:
             if ops_sem_definicao:
                 produtos_por_servico["OPs Sem Definição"] = ops_sem_definicao
 
-            nova_lista_produtos, produtos_sem_op = self.separar_dados_select(produtos_por_servico)
+            nova_lista_produtos, produtos_sem = self.separar_dados_select(produtos_por_servico)
 
-            self.excel2(nova_lista_produtos)
+            self.excel2(nova_lista_produtos, produtos_sem_ops)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -1088,7 +1120,7 @@ class TelaPcpPrevisaoV2:
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
             return None
 
-    def excel2(self, produtos_por_servico):
+    def excel2(self, produtos_por_servico, produtos_sem_ops):
         try:
             import pandas as pd
             from openpyxl import load_workbook
@@ -1152,6 +1184,42 @@ class TelaPcpPrevisaoV2:
 
                     planilhas_por_servico[nome_aba].append(linha)
 
+            dados_sem_ops = []
+            for servico, produtos in produtos_sem_ops.items():
+                print(servico, produtos)
+                for p in produtos:
+                    codigo = p.get("codigo")
+                    print(codigo)
+
+                    cursor = conecta.cursor()
+                    cursor.execute(f"""
+                                        SELECT prod.id, prod.codigo, prod.descricao, COALESCE(prod.obs, ''),
+                                               prod.unidade, prod.conjunto, tip.tipomaterial, COALESCE(serv.descricao, '')
+                                        FROM produto as prod
+                                        LEFT JOIN tipomaterial as tip ON prod.tipomaterial = tip.id
+                                        LEFT JOIN SERVICO_INTERNO as serv ON prod.ID_SERVICO_INTERNO = serv.id
+                                        WHERE prod.codigo = '{codigo}';
+                                    """)
+                    detalhes_produto = cursor.fetchall()
+
+                    conjunto = detalhes_produto[0][5]
+                    print(codigo, conjunto)
+
+                    dados_sem_ops.append({
+                        "Serviço": servico,
+                        "Código": p.get("codigo", ""),
+                        "Descrição": p.get("descricao", ""),
+                        "Referência": p.get("referencia", ""),
+                        "Unidade": p.get("unidade", ""),
+                        "Tipo Material": p.get("tipo_material", ""),
+                        "Quantidade": p.get("quantidade", ""),
+                        "Nível": p.get("pontos", ""),
+                        "Conjunto": p.get("conjunto", ""),
+                        "Código Pai": p.get("cod_pai", ""),
+                        "Pacote": p.get("pacote", ""),
+                        "PI": p.get("pi", "")
+                    })
+
             desktop = Path.home() / "Desktop"
             caminho_arquivo = desktop / "Produto por Serviço.xlsx"
 
@@ -1161,6 +1229,11 @@ class TelaPcpPrevisaoV2:
                     if "Nível" in df.columns:
                         df.sort_values(by="Nível", ascending=False, inplace=True)
                     df.to_excel(writer, sheet_name=aba, index=False)
+
+                # Agora escreve a aba de Produtos sem OP
+                if dados_sem_ops:
+                    df_sem_ops = pd.DataFrame(dados_sem_ops)
+                    df_sem_ops.to_excel(writer, sheet_name="Produtos sem OP", index=False)
 
             wb = load_workbook(caminho_arquivo)
 
