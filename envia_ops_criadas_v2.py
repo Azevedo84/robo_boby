@@ -19,6 +19,8 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
+from dados_email import email_user, password
+
 
 class EnviaOrdensProducao:
     def __init__(self):
@@ -80,10 +82,7 @@ class EnviaOrdensProducao:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -292,7 +291,7 @@ class EnviaOrdensProducao:
 
     def envia_email_usinagem(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 
@@ -339,7 +338,7 @@ class EnviaOrdensProducao:
 
     def envia_email_conjunto(self, caminho_listagem, arquivo_listagem):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 
@@ -389,7 +388,7 @@ class EnviaOrdensProducao:
 
     def envia_email_nao_acha_op(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - Não foi encontrado o número da OP'
 
@@ -434,7 +433,7 @@ class EnviaOrdensProducao:
 
     def envia_email_op_nao_existe(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - A OP {self.num_op} não existe!'
 
@@ -476,7 +475,7 @@ class EnviaOrdensProducao:
 
     def envia_email_op_encerrada(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - A OP {self.num_op} já foi encerrada!'
 
@@ -518,7 +517,7 @@ class EnviaOrdensProducao:
 
     def envia_email_numeros_duplicados(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - Arquivos Duplicados na pasta "OP"'
 

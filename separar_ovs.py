@@ -66,10 +66,7 @@ class SepararOVS:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

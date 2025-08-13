@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+from dados_email import email_user, password
 
 
 class VencimentoPI:
@@ -69,10 +70,7 @@ class VencimentoPI:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -81,7 +79,7 @@ class VencimentoPI:
 
     def envia_email_vencendo(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'PI - Pedido Interno com Prazo Vencendo!'
 
@@ -89,7 +87,7 @@ class VencimentoPI:
             msg['From'] = email_user
             msg['Subject'] = subject
 
-            body = f"{saudacao}\n\nAbaixo a lista de produtos para Gerar OP:\n\n"
+            body = f"{saudacao}\n\nAbaixo a lista de Pedidos Vencendo:\n\n"
 
             for i in lista_produtos:
                 num_ped, cod, descr, ref, um, qtde, entrega, data_necessidade = i
@@ -121,7 +119,7 @@ class VencimentoPI:
 
     def envia_email_vencido(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'PI - Pedido Interno com Prazo Vencido!'
 
@@ -129,7 +127,7 @@ class VencimentoPI:
             msg['From'] = email_user
             msg['Subject'] = subject
 
-            body = f"{saudacao}\n\nAbaixo a lista de produtos para Gerar OP:\n\n"
+            body = f"{saudacao}\n\nAbaixo a lista de Pedidos Vencidos:\n\n"
 
             for i in lista_produtos:
                 num_ped, cod, descr, ref, um, qtde, entrega, data_necessidade = i

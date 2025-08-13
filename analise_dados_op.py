@@ -16,6 +16,7 @@ from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime
+from dados_email import email_user, password
 
 
 class DadosOrdensDeProducao:
@@ -256,10 +257,7 @@ class DadosOrdensDeProducao:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -280,7 +278,7 @@ class DadosOrdensDeProducao:
 
     def envia_email(self, caminho, arquivo):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 

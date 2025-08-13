@@ -1,20 +1,9 @@
 import sys
-from banco_dados.conexao import conecta, conecta_robo
+from banco_dados.conexao import conecta
 from banco_dados.controle_erros import grava_erro_banco
 import os
 import traceback
 import inspect
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email.header import Header
-from email import encoders
-from datetime import datetime
-
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
 
 
 class ClassificarOps:

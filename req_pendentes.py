@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 import traceback
+from dados_email import email_user, password
 
 
 class EnviaRequisicaoPendentes:
@@ -50,9 +51,6 @@ class EnviaRequisicaoPendentes:
                 saudacao = "Boa Noite!"
             elif hora_int < 5:
                 saudacao = "Boa Noite!"
-
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
 
             subject = f'Req - Requisição Nº {numero} - Não foi gerado Ordem de Compra!'
 

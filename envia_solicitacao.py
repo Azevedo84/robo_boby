@@ -17,6 +17,8 @@ from openpyxl.styles import Side, Alignment, Border, Font
 import openpyxl.styles as styles
 from unidecode import unidecode
 
+from dados_email import email_user, password
+
 
 class EnviaSolicitacaoCompra:
     def __init__(self):
@@ -53,7 +55,7 @@ class EnviaSolicitacaoCompra:
             else:
                 solicitante = "Desconhecido"
 
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'Solicitação Nº {numero_sol}'
 
@@ -76,7 +78,8 @@ class EnviaSolicitacaoCompra:
             part = MIMEBase('application', "octet-stream")
             part.set_payload(attachment.read())
             encoders.encode_base64(part)
-            part.add_header('Content-Disposition', 'attachment', filename=Header(nome_arquivo, 'utf-8').encode())
+            part.add_header('Content-Disposition', 'attachment',
+                            filename=Header(nome_arquivo, 'utf-8').encode())
             msg.attach(part)
 
             if anexos:
@@ -133,10 +136,7 @@ class EnviaSolicitacaoCompra:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

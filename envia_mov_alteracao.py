@@ -15,6 +15,7 @@ import os
 from datetime import date, datetime
 import inspect
 import traceback
+from dados_email import email_user, password
 
 
 class EnviaAlteracaoMovimentacao:
@@ -64,12 +65,10 @@ class EnviaAlteracaoMovimentacao:
                         f"fat_maq@unisold.com.br. " \
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
-    
-            email_user = 'ti.ahcmaq@gmail.com'
+
             to = ['<maquinas@unisold.com.br>']
-            password = 'poswxhqkeaacblku'
     
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
     
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -146,7 +145,7 @@ class EnviaAlteracaoMovimentacao:
         try:
             dia_relatorio, mes_escrito, ano_relatorio, data_str = self.desmembra_datas(data_mov)
     
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
     
             subject = f'Mov - Alterações do dia {data_str}'
     
@@ -203,7 +202,7 @@ class EnviaAlteracaoMovimentacao:
                                         f"- Referência.: {ref_s}\n" \
                                         f"- UM: {um_s} Saldo: {saldo_s}\n\n"
     
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
     
             subject = f'Mov - Problemas na Movimentação depois de alterações'
     

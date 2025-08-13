@@ -15,6 +15,7 @@ from datetime import datetime
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from dados_email import email_user, password
 
 
 class EnviaIndustrializacao:
@@ -67,10 +68,7 @@ class EnviaIndustrializacao:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -179,7 +177,7 @@ class EnviaIndustrializacao:
 
     def envia_email(self, caminho, arquivo):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 

@@ -9,6 +9,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
+from dados_email import email_user, password
 
 
 class OPSeOCSFaltando:
@@ -205,8 +206,23 @@ class OPSeOCSFaltando:
                                 if resultado:
                                     for ii in resultado:
                                         cod_f, descr_f, ref_f, um_f, qtde_f = ii
-                                        dados = (cod_f, descr_f, ref_f, um_f, necessidade)
-                                        lista_industrializacao.append(dados)
+
+                                        cursor = conecta.cursor()
+                                        cursor.execute(
+                                            "SELECT SUM(ordser.quantidade) "
+                                            "FROM ordemservico AS ordser "
+                                            "INNER JOIN produto prod ON ordser.produto = prod.id "
+                                            "WHERE ordser.status = 'A' "
+                                            "AND prod.codigo = ? "
+                                            "GROUP BY prod.codigo;",
+                                            (cod_f,)
+                                        )
+                                        total_op = cursor.fetchall()
+
+                                        if not total_op:
+                                            dados = (cod_f, descr_f, ref_f, um_f, necessidade)
+                                            print(cod, dados)
+                                            lista_industrializacao.append(dados)
 
                             else:
                                 dados = (cod, descr, ref, um, necessidade)
@@ -253,10 +269,7 @@ class OPSeOCSFaltando:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -266,7 +279,7 @@ class OPSeOCSFaltando:
 
     def envia_email_acabado(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'PCP - Gerar OP dos produtos!'
 
@@ -305,7 +318,7 @@ class OPSeOCSFaltando:
 
     def envia_email_industrializado(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'PCP - Produtos para Industrializar!'
 
@@ -344,7 +357,7 @@ class OPSeOCSFaltando:
 
     def envia_email_comprado(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'PCP - Produtos para Comprar!'
 

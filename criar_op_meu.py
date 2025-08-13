@@ -17,6 +17,7 @@ from email.header import Header
 from email import encoders
 from datetime import datetime, date, timedelta
 import traceback
+from dados_email import email_user, password
 
 
 class EnviaOrdensProducao:
@@ -83,10 +84,7 @@ class EnviaOrdensProducao:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -274,7 +272,7 @@ class EnviaOrdensProducao:
 
     def envia_email_nao_acha_desenho(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - Não foi encontrado o desenho {self.num_desenho_arq}'
 
@@ -315,7 +313,7 @@ class EnviaOrdensProducao:
 
     def envia_email_tipo_nao_cadastrado(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - O produto {self.cod_prod} não tem o "Tipo de Material" definido no cadsatro'
 
@@ -357,7 +355,7 @@ class EnviaOrdensProducao:
 
     def envia_email_desenho_duplicado(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - Foi encontrado produtos com desenho duplicado no cadastro!'
 
@@ -403,7 +401,7 @@ class EnviaOrdensProducao:
 
     def envia_email_sem_estrutura(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to = self.dados_email()
 
             subject = f'OP - Produto não possui estrutura!'
 

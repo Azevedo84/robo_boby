@@ -16,6 +16,7 @@ import pandas as pd
 from openpyxl import load_workbook, drawing
 from openpyxl.styles import Side, Alignment, Border, Font
 from threading import Thread
+from dados_email import email_user, password
 
 
 para_sem_saldo = None
@@ -69,13 +70,9 @@ class EnviaMovimentacao:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-
             to = ['<maquinas@unisold.com.br>', '<estoque@acinplas.com.br>', 'fat_maq@unisold.com.br']
 
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -135,7 +132,7 @@ class EnviaMovimentacao:
 
     def envia_email_com_anexo(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
 
             data_hoje, data_relatorio, dia_relatorio, mes_certo, ano_relatorio, data_str = self.datas_relatorio()
 
@@ -181,7 +178,7 @@ class EnviaMovimentacao:
 
     def envia_email_sem_anexo(self):
         try:
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
 
             data_hoje, data_relatorio, dia_relatorio, mes_certo, ano_relatorio, data_str = self.datas_relatorio()
 
@@ -228,7 +225,7 @@ class EnviaMovimentacao:
                                         f"- Referência.: {ref_s}\n" \
                                         f"- UM: {um_s} Saldo: {saldo_s}\n\n"
 
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
 
             data_hoje, data_relatorio, dia_relatorio, mes_certo, ano_relatorio, data_str = self.datas_relatorio()
 

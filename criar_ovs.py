@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, date
 import traceback
+from dados_email import email_user, password
 
 
 class EnviaPIProntas:
@@ -56,12 +57,9 @@ class EnviaPIProntas:
                         f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
             to = ['<maquinas@unisold.com.br>']
 
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -70,7 +68,7 @@ class EnviaPIProntas:
 
     def envia_email(self, lista_produtos):
         try:
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
 
             subject = f'OV - Produtos Prontos - Gerar Ordem de Venda!'
 

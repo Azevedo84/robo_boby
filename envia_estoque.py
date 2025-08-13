@@ -15,6 +15,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 
+from dados_email import email_user, password
+
 
 class EnviaEstoqueFinal:
     def __init__(self):
@@ -199,13 +201,9 @@ class EnviaEstoqueFinal:
                         f"Se houver algum problema com o recebimento de emails, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            email_user = 'ti.ahcmaq@gmail.com'
-
             to = ['<maquinas@unisold.com.br>', '<estoque@acinplas.com.br>', '<fat_maq@unisold.com.br>']
 
-            password = 'poswxhqkeaacblku'
-
-            return saudacao, msg_final, email_user, to, password
+            return saudacao, msg_final, to
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -214,7 +212,7 @@ class EnviaEstoqueFinal:
 
     def envia_email(self, mes_escrito, ano, arquivo, caminho_arquivo):
         try:
-            saudacao, msg_final, email_user, to, password = self.mensagem_email()
+            saudacao, msg_final, to = self.mensagem_email()
 
             subject = f'Est - Estoque Final {mes_escrito}/{ano}!'
 
@@ -283,7 +281,7 @@ class EnviaEstoqueFinal:
         try:
             data_hoje = date.today()
 
-            if data_hoje.day > 1:
+            if data_hoje.day >= 1:
                 primeiro_dia_do_mes_atual = date(data_hoje.year, data_hoje.month, 1)
                 ultimo_dia_mes = primeiro_dia_do_mes_atual - timedelta(days=1)
                 data_string = ultimo_dia_mes.strftime("%d-%m-%Y")
