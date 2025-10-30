@@ -370,7 +370,7 @@ class EnviaSolicitacaoCompra:
         try:
             cursor = conecta_robo.cursor()
             cursor.execute(f"Insert into ENVIA_SOLICITACAO (ID, NUM_SOL) "
-                           f"values (GEN_ID(GEN_ENVIA_OPS_PRONTAS_ID,1), {num_sol});")
+                           f"values (GEN_ID(GEN_ENVIA_SOLICITACAO_ID,1), {num_sol});")
             print(f"Nº Solicitação {num_sol} inserido no banco com sucesso!")
 
             conecta_robo.commit()

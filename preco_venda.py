@@ -64,38 +64,64 @@ for codigo_produto in codigos:
                    f"where prod.codigo = {codigo_produto};")
     select_prod = cursor.fetchall()
     id_pai, cod, id_estrutura, custo_compra, tempo_mao, custo_servico, tipo_material = select_prod[0]
+    print(id_estrutura)
 
     nova_tabela = []
 
-    cursor = conecta.cursor()
-    cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
-                   f"prod.conjunto, prod.unidade, "
-                   f"(estprod.quantidade * 1) as qtde, prod.terceirizado, prod.custounitario, "
-                   f"prod.custoestrutura "
-                   f"from estrutura_produto as estprod "
-                   f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
-                   f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
-                   f"where estprod.id_estrutura = {id_estrutura} "
-                   f"order by conj.conjunto DESC, prod.descricao ASC;")
-    tabela_estrutura = cursor.fetchall()
+    if id_estrutura:
+        cursor = conecta.cursor()
+        cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
+                       f"prod.conjunto, prod.unidade, "
+                       f"(estprod.quantidade * 1) as qtde, prod.terceirizado, prod.custounitario, "
+                       f"prod.custoestrutura "
+                       f"from estrutura_produto as estprod "
+                       f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                       f"INNER JOIN conjuntos conj ON prod.conjunto = conj.id "
+                       f"where estprod.id_estrutura = {id_estrutura} "
+                       f"order by conj.conjunto DESC, prod.descricao ASC;")
+        tabela_estrutura = cursor.fetchall()
 
-    if tabela_estrutura:
-        for i in tabela_estrutura:
-            cod, descr, ref, conjunto, um, qtde, terc, unit, estrut = i
+        if tabela_estrutura:
+            for i in tabela_estrutura:
+                cod, descr, ref, conjunto, um, qtde, terc, unit, estrut = i
 
-            qtde_float = valores_para_float(qtde)
-            unit_float = valores_para_float(unit)
-            estrut_float = valores_para_float(estrut)
+                qtde_float = valores_para_float(qtde)
+                unit_float = valores_para_float(unit)
+                estrut_float = valores_para_float(estrut)
 
-            if conjunto == 10:
-                total = qtde_float * estrut_float
+                if conjunto == 10:
+                    total = qtde_float * estrut_float
 
-                dados = (cod, descr, ref, um, qtde_float, estrut_float, total, conjunto)
-                nova_tabela.append(dados)
-            else:
+                    dados = (cod, descr, ref, um, qtde_float, estrut_float, total, conjunto)
+                    nova_tabela.append(dados)
+                else:
+                    total = qtde_float * unit_float
+
+                    dados = (cod, descr, ref, um, qtde, unit_float, total, conjunto)
+                    nova_tabela.append(dados)
+
+    else:
+        cursor = conecta.cursor()
+        cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, '') as obs, "
+                       f"prod.conjunto, prod.unidade, prod.terceirizado, prod.custounitario, prod.custoestrutura, "
+                       f"prod.quantidade "
+                       f"FROM produto  as prod "
+                       f"LEFT JOIN tipomaterial tip ON prod.tipomaterial = tip.id "
+                       f"where prod.codigo = {codigo_produto};")
+        tabela_estrutura = cursor.fetchall()
+
+        if tabela_estrutura:
+            for i in tabela_estrutura:
+                cod, descr, ref, conjunto, um, terc, unit, estrut, saldo = i
+
+                qtde_float = valores_para_float(saldo)
+
+                unit_float = valores_para_float(unit)
+                estrut_float = valores_para_float(estrut)
+
                 total = qtde_float * unit_float
 
-                dados = (cod, descr, ref, um, qtde, unit_float, total, conjunto)
+                dados = (cod, descr, ref, um, saldo, unit_float, total, conjunto)
                 nova_tabela.append(dados)
 
     if nova_tabela:

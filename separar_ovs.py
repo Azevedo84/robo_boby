@@ -14,6 +14,7 @@ from datetime import datetime
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from dados_email import email_user, password
 
 
 class SepararOVS:
@@ -164,7 +165,7 @@ class SepararOVS:
 
     def envia_email(self, num_ov, caminho, arquivo):
         try:
-            saudacao, msg_final, email_user, to, password = self.dados_email()
+            saudacao, msg_final, to  = self.dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 
@@ -239,12 +240,14 @@ class SepararOVS:
 
                     id_oc, data, numero, cliente, id_cliente = dados
 
+                    data_final = data.strftime('%d/%m/%Y')
+
                     cursor = conecta_robo.cursor()
                     cursor.execute(f"SELECT * FROM SEPARAR_OVS where NUM_OV = {numero} and CLIENTE_ID = {id_cliente};")
                     dados_lancados = cursor.fetchall()
 
                     if not dados_lancados:
-                        coco = (data, numero, cliente, id_cliente)
+                        coco = (data_final, numero, cliente, id_cliente)
                         dados_cliente.append(coco)
 
                         cursor = conecta.cursor()

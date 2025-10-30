@@ -39,6 +39,9 @@ class EnviaOrdensProducao:
         self.num_op = ""
         self.tipo = ""
 
+        self.manipula_comeco_aguardando_material()
+        self.manipula_comeco_corte()
+
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
             tb = traceback.extract_tb(excecao)
@@ -303,6 +306,53 @@ class EnviaOrdensProducao:
 
             body = f"{saudacao}\n\n" \
                    f"A Ordem de Produção Nº {self.num_op} está com todo material em estoque para ser separado.\n\n" \
+                   f"{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            diretorio_atual = os.path.dirname(os.path.abspath(__file__))
+
+            caminho_arquivo = os.path.join(diretorio_atual, self.caminho_original)
+
+            attachment = open(caminho_arquivo, 'rb')
+
+            part = MIMEBase('application', "octet-stream")
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', 'attachment', filename=Header(self.arq_original, 'utf-8').encode())
+            msg.attach(part)
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            attachment.close()
+
+            server.quit()
+
+            print(f'OP {self.num_op} enviada com sucesso!')
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_usinagem_corte(self):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            to = ['<maquinas@unisold.com.br>']
+
+            subject = f'OP Corte - Separar material OP {self.num_op}'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\n" \
+                   f"Na Ordem de Produção Nº {self.num_op}, primeiro precisa ser feito o corte do material.\n\n" \
                    f"{msg_final}"
 
             msg.attach(MIMEText(body, 'plain'))
@@ -648,7 +698,20 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def procura_arquivos(self):
+    def verifica_corte(self):
+        try:
+            cursor = conecta_robo.cursor()
+            cursor.execute(f"SELECT * FROM ENVIA_USINAGEM_CORTE where num_op = {self.num_op};")
+            select_envio = cursor.fetchall()
+
+            return select_envio
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def procura_arquivos_aguarda_material(self):
         try:
             caminho = r'\\publico\C\OP\Aguardando Material/'
             extensao = ".pdf"
@@ -667,9 +730,147 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def manipula_comeco(self):
+    def procura_arquivos_corte(self):
         try:
-            arquivos_pdf = self.procura_arquivos()
+            caminho = r'\\publico\C\OP\Usinagem para Corte/'
+            extensao = ".pdf"
+
+            arquivos_pdfs = []
+
+            for arquivo in os.listdir(caminho):
+                if arquivo.endswith(extensao):
+                    caminho_arquivo = os.path.join(caminho, arquivo)
+                    arquivos_pdfs.append(caminho_arquivo)
+
+            return arquivos_pdfs
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def manipula_comeco_aguardando_material(self):
+        try:
+            arquivos_pdf = self.procura_arquivos_aguarda_material()
+
+            numeros_op_processados = []
+            duplicados = []
+
+            for arq_original in arquivos_pdf:
+                dadinhos = arq_original[35:]
+
+                inicio = dadinhos.find("OP ")
+                dadinhos1 = dadinhos[inicio + 3:]
+
+                ini = dadinhos1.find(" - ")
+                num_op = dadinhos1[:ini]
+
+                if num_op in numeros_op_processados:
+                    duplicados.append(num_op)
+                else:
+                    numeros_op_processados.append(num_op)
+
+            if not duplicados:
+                for arq_original in arquivos_pdf:
+                    self.caminho_original = arq_original
+
+                    self.arq_original = arq_original[35:]
+
+                    inicio = self.arq_original.find("OP ")
+                    dadinhos1 = self.arq_original[inicio + 3:]
+
+                    ini = dadinhos1.find(" - ")
+                    self.num_op = dadinhos1[:ini]
+                    print("self.num_op", self.num_op)
+
+                    try:
+                        cursor = conecta.cursor()
+                        cursor.execute(f"SELECT numero, datainicial, status, produto, quantidade "
+                                       f"FROM ordemservico where numero = {self.num_op};")
+                        extrair_dados = cursor.fetchall()
+                        if not extrair_dados:
+                            self.envia_email_op_nao_existe()
+                        else:
+                            cursor = conecta.cursor()
+                            cursor.execute(f"SELECT op.numero, op.codigo, op.id_estrutura, prod.descricao, "
+                                           f"COALESCE(prod.obs, ''), "
+                                           f"prod.unidade, COALESCE(prod.tipomaterial, ''), op.quantidade "
+                                           f"FROM ordemservico as op "
+                                           f"INNER JOIN produto as prod ON op.produto = prod.id "
+                                           f"where op.numero = {self.num_op} "
+                                           f"AND op.status = 'A';")
+                            select_status = cursor.fetchall()
+
+                            if not select_status:
+                                self.envia_email_op_encerrada()
+                                self.inserir_no_banco()
+                                self.excluir_arquivo(self.caminho_original)
+                            else:
+                                self.id_estrut = select_status[0][2]
+                                self.cod_prod = select_status[0][1]
+                                self.descr_prod = select_status[0][3]
+                                self.ref_prod = select_status[0][4]
+                                self.um_prod = select_status[0][5]
+                                self.qtde_produto = select_status[0][7]
+                                self.tipo = select_status[0][6]
+
+                                foi_salvo_banco = self.verifica_banco()
+
+                                todo_material_consumido, lista_subs = self.verifica_ops_concluidas()
+
+                                diretorio_destino = r'\\publico\C\OP\Aguardando Material/'
+                                arquivo_listagem = f'Listagem - OP {self.num_op}.pdf'
+                                caminho_listagem = os.path.join(diretorio_destino, arquivo_listagem)
+
+                                if self.tipo == "87":
+                                    if not foi_salvo_banco:
+                                        if todo_material_consumido:
+                                            print("CONJUNTO")
+                                            self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
+                                            self.inserir_no_banco()
+                                            self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
+                                            self.excluir_arquivo(self.caminho_original)
+                                            self.excluir_arquivo(caminho_listagem)
+                                else:
+                                    if not foi_salvo_banco:
+                                        if todo_material_consumido:
+                                            tot_estrut, tot_consumo = self.manipula_dados_tabela_producao(self.num_op)
+
+                                            if tot_estrut == tot_consumo:
+                                                print("USINAGEM EXCLUÍDA! FOI LANÇADO CONSUMO")
+                                                self.inserir_no_banco()
+                                                self.excluir_arquivo(self.caminho_original)
+                                            else:
+                                                if lista_subs:
+                                                    print("USINAGEM COM SUBSTITUTO")
+                                                    self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
+                                                    self.inserir_no_banco()
+                                                    self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
+                                                    self.excluir_arquivo(self.caminho_original)
+                                                    self.excluir_arquivo(caminho_listagem)
+                                                else:
+                                                    print("USINAGEM")
+                                                    self.inserir_no_banco()
+                                                    self.envia_email_usinagem()
+                                                    self.excluir_arquivo(self.caminho_original)
+
+
+                    except fdb.DatabaseError:
+                        print("aaaaaaaaaaaa")
+                        self.envia_email_nao_acha_op()
+
+            else:
+                print("duplicados", duplicados)
+                self.envia_email_numeros_duplicados()
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def manipula_comeco_corte(self):
+        try:
+            arquivos_pdf = self.procura_arquivos_corte()
 
             numeros_op_processados = []
             duplicados = []
@@ -730,36 +931,11 @@ class EnviaOrdensProducao:
                                 self.qtde_produto = select_status[0][7]
                                 self.tipo = select_status[0][6]
 
-                                foi_salvo_banco = self.verifica_banco()
+                                if self.tipo != "87":
+                                    print("USINAGEM CORTE")
+                                    self.envia_email_usinagem_corte()
+                                    self.excluir_arquivo(self.caminho_original)
 
-                                if not foi_salvo_banco:
-                                    todo_material_consumido, lista_subs = self.verifica_ops_concluidas()
-
-                                    if todo_material_consumido:
-                                        diretorio_destino = r'\\publico\C\OP\Aguardando Material/'
-                                        arquivo_listagem = f'Listagem - OP {self.num_op}.pdf'
-                                        caminho_listagem = os.path.join(diretorio_destino, arquivo_listagem)
-
-                                        if self.tipo == "87":
-                                            print("CONJUNTO")
-                                            self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
-                                            self.inserir_no_banco()
-                                            self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
-                                            self.excluir_arquivo(self.caminho_original)
-                                            self.excluir_arquivo(caminho_listagem)
-                                        else:
-                                            if lista_subs:
-                                                print("USINAGEM COM SUBSTITUTO")
-                                                self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
-                                                self.inserir_no_banco()
-                                                self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
-                                                self.excluir_arquivo(self.caminho_original)
-                                                self.excluir_arquivo(caminho_listagem)
-                                            else:
-                                                print("USINAGEM")
-                                                self.inserir_no_banco()
-                                                self.envia_email_usinagem()
-                                                self.excluir_arquivo(self.caminho_original)
 
                     except fdb.DatabaseError:
                         print("aaaaaaaaaaaa")
@@ -774,6 +950,56 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def manipula_dados_tabela_producao(self, num_op):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute(f"select ordser.datainicial, ordser.dataprevisao, ordser.numero, prod.codigo, "
+                           f"prod.descricao, "
+                           f"COALESCE(prod.obs, '') as obs, prod.unidade, "
+                           f"ordser.quantidade, ordser.id_estrutura "
+                           f"from ordemservico as ordser "
+                           f"INNER JOIN produto prod ON ordser.produto = prod.id "
+                           f"where ordser.numero = {num_op};")
+            op_abertas = cursor.fetchall()
+            emissao, previsao, op, cod, descr, ref, um, qtde, id_estrut = op_abertas[0]
+
+            if id_estrut:
+                total_estrut = 0
+                total_consumo = 0
+
+                cursor = conecta.cursor()
+                cursor.execute(f"SELECT estprod.id, "
+                               f"((SELECT quantidade FROM ordemservico where numero = {op}) * "
+                               f"(estprod.quantidade)) AS Qtde "
+                               f"FROM estrutura_produto as estprod "
+                               f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                               f"where estprod.id_estrutura = {id_estrut};")
+                itens_estrutura = cursor.fetchall()
+
+                for dads in itens_estrutura:
+                    ides, quantidade = dads
+                    total_estrut += 1
+
+                    cursor = conecta.cursor()
+                    cursor.execute(f"SELECT max(prodser.ID_ESTRUT_PROD), "
+                                   f"sum(prodser.QTDE_ESTRUT_PROD) as total "
+                                   f"FROM estrutura_produto as estprod "
+                                   f"INNER JOIN produto prod ON estprod.id_prod_filho = prod.id "
+                                   f"INNER JOIN produtoos as prodser ON estprod.id = prodser.ID_ESTRUT_PROD "
+                                   f"where prodser.numero = {op} and estprod.id = {ides} "
+                                   f"group by prodser.ID_ESTRUT_PROD;")
+                    itens_consumo = cursor.fetchall()
+                    for duds in itens_consumo:
+                        id_mats, qtde_mats = duds
+                        if ides == id_mats and quantidade == qtde_mats:
+                            total_consumo += 1
+
+                return total_estrut, total_consumo
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
 
 chama_classe = EnviaOrdensProducao()
-chama_classe.manipula_comeco()

@@ -66,7 +66,7 @@ class LancaItensEstrutura:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def envia_email(self, dados):
+    def envia_email_sem_tipo(self, dados):
         try:
             saudacao, msg_final, to = self.dados_email()
 
@@ -100,9 +100,44 @@ class LancaItensEstrutura:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def envia_email_sem_desenho_pdf(self, dados):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'SEM DESENHO PDF - PRODUTOS SEM DESENHO PDF NO SERVIDOR!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nAbaixo a lista de produtos sem desenho PDF na pasta OP do servidor:\n\n"
+
+            for i in dados:
+                body += f"- {i}\n\n"
+
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            server.quit()
+
+            print("email enviado")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
     def manipula_dados_pi(self):
         try:
             nova_lista_sem_tipo = []
+            lista_sem_desenho_pdf = []
 
             timestamp_atual = datetime.now()
             timestamp_formatado = timestamp_atual.strftime('%Y-%m-%d %H:%M:%S')
@@ -110,7 +145,7 @@ class LancaItensEstrutura:
             cursor = conecta.cursor()
             cursor.execute(f"SELECT prodint.id_pedidointerno, prod.id, prod.codigo, prod.descricao, "
                            f"COALESCE(prod.obs, '') as obs, "
-                           f"prod.unidade, prodint.qtde "
+                           f"prod.unidade, prodint.qtde, prod.conjunto "
                            f"FROM PRODUTOPEDIDOINTERNO as prodint "
                            f"INNER JOIN produto as prod ON prodint.id_produto = prod.id "
                            f"INNER JOIN pedidointerno as ped ON prodint.id_pedidointerno = ped.id "
@@ -119,7 +154,7 @@ class LancaItensEstrutura:
             dados_interno = cursor.fetchall()
             if dados_interno:
                 for i in dados_interno:
-                    num_pi, id_prod, cod, descr, ref, um, qtde = i
+                    num_pi, id_prod, cod, descr, ref, um, qtde, conj = i
                     print("PRODUTOS DO PI:", i)
 
                     estrutura = self.calculo_3_verifica_estrutura(cod, qtde)
@@ -160,9 +195,12 @@ class LancaItensEstrutura:
                             print("NOVO", cod, descr, ref, um, qtde_itens)
 
                         nova_lista_sem_tipo = self.manipula_estrutura(id_prod, estrutura, nova_lista_sem_tipo)
+                        lista_sem_desenho_pdf = self.verifica_desenhos_pdf(cod, descr, ref, conj, estrutura, lista_sem_desenho_pdf)
 
             if nova_lista_sem_tipo:
-                self.envia_email(nova_lista_sem_tipo)
+                self.envia_email_sem_tipo(nova_lista_sem_tipo)
+            if lista_sem_desenho_pdf:
+                self.envia_email_sem_desenho_pdf(lista_sem_desenho_pdf)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -200,6 +238,43 @@ class LancaItensEstrutura:
                         filhos.extend(self.calculo_3_verifica_estrutura(cod_f, qtde_f))
 
             return filhos
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def verifica_desenhos_pdf(self, cod, descr, ref, id_conjunto, estrutura, lista_sem_desenho_pdf):
+        try:
+            for i in estrutura:
+                cod_pai, descr_pai, ref_pai, um_pai, qtde, id_tipo, tipo, id_conj = i
+
+                if id_conj == 10:
+                    import re
+
+                    s = re.sub(r"[^\d.]", "", ref_pai)  # remove tudo que não é número ou ponto
+                    s = re.sub(r"\.+$", "", s)
+
+                    caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+
+                    if not os.path.exists(caminho_pdf):
+                        dados = (cod_pai, descr_pai, ref_pai)
+                        lista_sem_desenho_pdf.append(dados)
+
+            if id_conjunto == 10:
+                import re
+
+                s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
+                s = re.sub(r"\.+$", "", s)
+
+                caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+
+                if not os.path.exists(caminho_pdf):
+                    dados = (cod, descr, ref)
+                    print("sem projeto", dados)
+                    lista_sem_desenho_pdf.append(dados)
+
+            return lista_sem_desenho_pdf
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
