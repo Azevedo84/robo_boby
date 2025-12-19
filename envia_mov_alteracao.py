@@ -189,7 +189,7 @@ class EnviaAlteracaoMovimentacao:
     
     def envia_email_sem_saldo(self, produtos_sem_saldo):
         try:
-            to_certo = ['<maquinas@unisold.com.br>', '<fat_maq@unisold.com.br>']
+            to_certo = ['<maquinas@unisold.com.br>']
     
             msg_itens = ""
             dados = produtos_sem_saldo

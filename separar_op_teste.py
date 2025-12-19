@@ -13,7 +13,7 @@ from email.header import Header
 from email import encoders
 from datetime import datetime
 
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -565,7 +565,7 @@ class EnviaOrdensProducao:
         try:
             lista_estrutura = self.listagem_material_estrutura(self.cod_prod, self.qtde_produto)
 
-            dados_op = [(self.num_op, self.cod_prod, self.descr_prod, self.ref_prod,
+            dados_prod_op = [(self.cod_prod, self.descr_prod, self.ref_prod,
                          self.um_prod, self.qtde_produto)]
 
             margem_esquerda = 0
@@ -579,8 +579,48 @@ class EnviaOrdensProducao:
                                     topMargin=margem_superior,
                                     bottomMargin=margem_inferior)
 
-            cabecalho_op = ['Nº OP', 'CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE']
-            elementos_op = self.adicionar_tabelas_listagem(dados_op, cabecalho_op)
+            # Título grande e centralizado
+            styles = getSampleStyleSheet()
+            titulo_op = ParagraphStyle(
+                name="TituloOP",
+                parent=styles["Heading1"],
+                fontSize=40,
+                leading=48,
+                spaceAfter=20,
+                fontName="Helvetica-Bold"
+            )
+
+            from reportlab.pdfbase.pdfmetrics import stringWidth
+            from reportlab.platypus import Spacer
+
+            from reportlab.platypus import Table, TableStyle, Paragraph
+
+            texto = f"OP {self.num_op}"
+
+            # largura do texto
+            largura_texto = stringWidth(texto, "Helvetica-Bold", 40)
+
+            # Defina aqui o "deslocamento" da esquerda
+            offset = 40  # ajuste esse valor conforme desejar (mais ou menos esquerda)
+
+            tabela = Table(
+                [
+                    ["", Paragraph(texto, titulo_op)]
+                ],
+                colWidths=[offset, largura_texto + 20]
+            )
+
+            tabela.hAlign = 'LEFT'  # <-- ESSENCIAL: força a tabela para o lado esquerdo
+
+            tabela.setStyle(TableStyle([
+                ('BOX', (1, 0), (1, 0), 0.5, colors.black),
+                ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+            ]))
+
+            elementos_op = [tabela]
+
+            cabecalho_prod_op = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE']
+            elementos_prod_op = self.adicionar_tabelas_listagem(dados_prod_op, cabecalho_prod_op)
 
             cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'QTDE', 'LOCALIZAÇÃO', 'SALDO']
             elementos_lista = self.adicionar_tabelas_listagem(lista_estrutura, cabecalho_lista)
@@ -597,7 +637,7 @@ class EnviaOrdensProducao:
                 elementos = elementos_op + [espaco_em_branco] + elementos_lista + \
                             [espaco_em_branco, texto_substituicoes, espaco_em_branco] + elementos_subs
             else:
-                elementos = elementos_op + [espaco_em_branco] + elementos_lista
+                elementos = elementos_op + [espaco_em_branco] + elementos_prod_op  + [espaco_em_branco] + elementos_lista
 
             doc.build(elementos)
 
@@ -640,7 +680,7 @@ class EnviaOrdensProducao:
 
     def manipula_comeco(self):
         try:
-            lista = ["8194",]
+            lista = ["8589",]
 
             for i in lista:
                 self.num_op = i

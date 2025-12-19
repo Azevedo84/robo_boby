@@ -114,7 +114,7 @@ class EnviaSolicitacaoCompra:
 
     def dados_email(self):
         try:
-            to = ['<maquinas@unisold.com.br>', 'fat_maq@unisold.com.br']
+            to = ['<maquinas@unisold.com.br>']
 
             current_time = (datetime.now())
             horario = current_time.strftime('%H')

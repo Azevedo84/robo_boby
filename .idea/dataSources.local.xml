@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="dataSourceStorageLocal" created-in="PY-253.28294.336">
+    <data-source name="ESTOQUE.GDB@PUBLICO" uuid="e3da3739-2468-43ab-8bae-67460d6f9c34">
+      <database-info product="Firebird 2.5" version="WI-V2.5.9.27139" jdbc-version="4.3" driver-name="Jaybird JCA/JDBC driver" driver-version="6.0.1" dbms="FIREBIRD" exact-version="2.5" exact-driver-version="6.0">
+        <extra-name-characters>$</extra-name-characters>
+        <identifier-quote-string>&quot;</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="upper" quoted-identifiers="exact" />
+      <secret-storage>master_key</secret-storage>
+      <user-name>sysdba</user-name>
+      <schema-mapping>
+        <introspection-scope>
+          <node kind="database" qname="@">
+            <node kind="schema" qname="@" />
+          </node>
+        </introspection-scope>
+      </schema-mapping>
+    </data-source>
+  </component>
+</project>

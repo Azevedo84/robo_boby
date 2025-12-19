@@ -273,6 +273,7 @@ class EnviaOrdensProducao:
                             id_mat_os, data_os, cod_os, descr_os, ref_os, um_os, qtde_os, qtde_mat_os = dados_os
 
                             qtde_mat_os_float = valores_para_float(qtde_mat_os)
+
                             qtde_consumo_op_final += qtde_mat_os_float
 
                         if qtde_consumo_op_final < qtde_e_float:

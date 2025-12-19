@@ -332,9 +332,6 @@ class ExecutaPlanoPcp:
 
                     cod, descr, ref, um, qtde_pi = i
 
-                    if cod == "17985":
-                        print(" nas pisss        ", i)
-
                     print("pelas pis abertos: ", cod, descr, ref, um, qtde_pi)
 
                     qtde_pi_float = valores_para_float(qtde_pi)
@@ -351,59 +348,64 @@ class ExecutaPlanoPcp:
                     detalhes_produto = cursor.fetchall()
                     num_conj, num_tipo, tipo, conjunto, saldo = detalhes_produto[0]
 
-                    qtde_nec, prod_sem_estrut, prod_sem_des = self.verifica_situacao_produto(cod, ref, saldo, num_conj, qtde_nec)
+                    qtde_nec, prod_sem_estrut, prod_sem_des, duplicado = self.verifica_situacao_produto(cod, ref, saldo, num_conj, qtde_nec)
 
-                    if prod_sem_des:
-                        self.envia_email_nao_acha_desenho(ref, cod)
+                    if duplicado:
+                        self.envia_email_desenho_duplicado(cod, ref)
                     else:
-                        if prod_sem_estrut:
-                            s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
-                            s = re.sub(r"\.+$", "", s) # saída: 47.00.014.07
-
-                            caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
-                            arquivo_pdf = f"{s}.pdf"
-
-                            if os.path.exists(caminho_pdf):
-                                self.envia_email_sem_estrutura(caminho_pdf, arquivo_pdf, i)
-                            else:
-                                self.envia_email_nao_acha_desenho(arquivo_pdf, cod)
+                        if prod_sem_des:
+                            self.envia_email_nao_acha_desenho(ref, cod)
                         else:
-                            if qtde_nec > 0:
-                                qtde_nec_f += qtde_nec
+                            if prod_sem_estrut:
+                                s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
+                                s = re.sub(r"\.+$", "", s) # saída: 47.00.014.07
 
-                                if num_tipo == 119:
-                                    estrutura = self.manipula_dados_tabela_estrutura(cod)
+                                caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+                                arquivo_pdf = f"{s}.pdf"
 
-                                    for ii in estrutura:
-                                        cod_f, descr_f, ref_f, um_f, qtde_f, saldo_f, num_conj_f, tipo_f, num_tipo_f = ii
-
-                                        qtde_nec_f, prod_sem_estr_f, prod_sem_des_f = self.verifica_situacao_produto(cod_f, ref_f, saldo_f,
-                                                                                                                 num_conj_f,
-                                                                                                                 qtde_nec_f)
-
-                                        if prod_sem_des_f:
-                                            self.envia_email_nao_acha_desenho(ref_f, cod_f)
-                                        else:
-                                            if prod_sem_estr_f:
-                                                s_f = re.sub(r"[^\d.]", "", ref_f)
-                                                s_f = re.sub(r"\.+$", "", s_f)
-
-                                                caminho_pdf_f = rf"\\Publico\C\OP\Projetos\{s_f}.pdf"
-                                                arquivo_pdf_f = f"{s_f}.pdf"
-
-                                                if os.path.exists(caminho_pdf_f):
-                                                    self.envia_email_sem_estrutura(caminho_pdf_f, arquivo_pdf_f, ii)
-                                                else:
-                                                    self.envia_email_nao_acha_desenho(arquivo_pdf_f, cod_f)
-                                            else:
-                                                if qtde_nec_f > 0:
-                                                    if num_tipo_f != 80:
-                                                        dados = (cod_f, descr_f, ref_f, um_f, num_conj_f, num_tipo_f, tipo_f, qtde_nec_f)
-                                                        lista_final.append(dados)
+                                if os.path.exists(caminho_pdf):
+                                    self.envia_email_sem_estrutura(caminho_pdf, arquivo_pdf, i)
                                 else:
-                                    if num_tipo != 80:
-                                        dados = (cod, descr, ref, um, num_conj, num_tipo, tipo, qtde_nec)
-                                        lista_final.append(dados)
+                                    self.envia_email_nao_acha_desenho(arquivo_pdf, cod)
+                            else:
+                                if qtde_nec > 0:
+                                    qtde_nec_f += qtde_nec
+
+                                    if num_tipo == 119:
+                                        estrutura = self.manipula_dados_tabela_estrutura(cod)
+
+                                        for ii in estrutura:
+                                            cod_f, descr_f, ref_f, um_f, qtde_f, saldo_f, num_conj_f, tipo_f, num_tipo_f = ii
+
+                                            qtde_nec_f, prod_sem_estr_f, prod_sem_des_f, duplicado_f = self.verifica_situacao_produto(cod_f, ref_f, saldo_f,
+                                                                                                                     num_conj_f,
+                                                                                                                     qtde_nec_f)
+                                            if duplicado_f:
+                                                self.envia_email_desenho_duplicado(cod, ref)
+                                            else:
+                                                if prod_sem_des_f:
+                                                    self.envia_email_nao_acha_desenho(ref_f, cod_f)
+                                                else:
+                                                    if prod_sem_estr_f:
+                                                        s_f = re.sub(r"[^\d.]", "", ref_f)
+                                                        s_f = re.sub(r"\.+$", "", s_f)
+
+                                                        caminho_pdf_f = rf"\\Publico\C\OP\Projetos\{s_f}.pdf"
+                                                        arquivo_pdf_f = f"{s_f}.pdf"
+
+                                                        if os.path.exists(caminho_pdf_f):
+                                                            self.envia_email_sem_estrutura(caminho_pdf_f, arquivo_pdf_f, ii)
+                                                        else:
+                                                            self.envia_email_nao_acha_desenho(arquivo_pdf_f, cod_f)
+                                                    else:
+                                                        if qtde_nec_f > 0:
+                                                            if num_tipo_f != 80:
+                                                                dados = (cod_f, descr_f, ref_f, um_f, num_conj_f, num_tipo_f, tipo_f, qtde_nec_f)
+                                                                lista_final.append(dados)
+                                    else:
+                                        if num_tipo != 80:
+                                            dados = (cod, descr, ref, um, num_conj, num_tipo, tipo, qtde_nec)
+                                            lista_final.append(dados)
 
             if lista_final:
                 self.executar_tarefa(lista_final)
@@ -428,9 +430,6 @@ class ExecutaPlanoPcp:
 
                     cod, descr, ref, um, qtde_pi = i
 
-                    if cod == "17985":
-                        print(" nas opsss        ", i)
-
                     print("pelas ops abertas: ", cod, descr, ref, um, qtde_pi)
 
                     cursor = conecta.cursor()
@@ -443,63 +442,67 @@ class ExecutaPlanoPcp:
                     detalhes_produto = cursor.fetchall()
                     num_conj, num_tipo, tipo, conjunto, saldo = detalhes_produto[0]
 
-                    qtde_nec, prod_sem_estrut, prod_sem_des = self.verifica_situacao_produto(cod, ref, saldo, num_conj, qtde_nec)
+                    qtde_nec, prod_sem_estrut, prod_sem_des, duplicado = self.verifica_situacao_produto(cod, ref, saldo, num_conj, qtde_nec)
 
-                    if prod_sem_des:
-                        self.envia_email_nao_acha_desenho(ref, cod)
+                    if duplicado:
+                        self.envia_email_desenho_duplicado(cod, ref)
                     else:
-                        if prod_sem_estrut:
-                            s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
-                            s = re.sub(r"\.+$", "", s) # saída: 47.00.014.07
-
-                            caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
-                            arquivo_pdf = f"{s}.pdf"
-
-                            if os.path.exists(caminho_pdf):
-                                self.envia_email_sem_estrutura(caminho_pdf, arquivo_pdf, i)
-                            else:
-                                self.envia_email_nao_acha_desenho(arquivo_pdf, cod)
+                        if prod_sem_des:
+                            self.envia_email_nao_acha_desenho(ref, cod)
                         else:
-                            if qtde_nec > 0:
-                                qtde_nec_f += qtde_nec
+                            if prod_sem_estrut:
+                                s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
+                                s = re.sub(r"\.+$", "", s) # saída: 47.00.014.07
 
-                                if num_tipo == 119:
-                                    estrutura = self.manipula_dados_tabela_estrutura(cod)
+                                caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+                                arquivo_pdf = f"{s}.pdf"
 
-                                    for ii in estrutura:
-                                        cod_f, descr_f, ref_f, um_f, qtde_f, saldo_f, num_conj_f, tipo_f, num_tipo_f = ii
-
-                                        qtde_nec_f, prod_sem_estr_f, prod_sem_des_f = self.verifica_situacao_produto(cod_f, ref_f, saldo_f,
-                                                                                                                 num_conj_f,
-                                                                                                                 qtde_nec_f)
-
-                                        if prod_sem_des_f:
-                                            self.envia_email_nao_acha_desenho(ref_f, cod_f)
-                                        else:
-                                            if prod_sem_estr_f:
-                                                s_f = re.sub(r"[^\d.]", "", ref_f)
-                                                s_f = re.sub(r"\.+$", "", s_f)
-
-                                                caminho_pdf_f = rf"\\Publico\C\OP\Projetos\{s_f}.pdf"
-                                                arquivo_pdf_f = f"{s_f}.pdf"
-
-                                                if os.path.exists(caminho_pdf_f):
-                                                    self.envia_email_sem_estrutura(caminho_pdf_f, arquivo_pdf_f, ii)
-                                                else:
-                                                    self.envia_email_nao_acha_desenho(arquivo_pdf_f, cod_f)
-                                            else:
-                                                if qtde_nec_f > 0:
-                                                    if num_tipo_f != 80:
-                                                        dados = (cod_f, descr_f, ref_f, um_f, num_conj_f, num_tipo_f, tipo_f, qtde_nec_f)
-                                                        lista_final.append(dados)
+                                if os.path.exists(caminho_pdf):
+                                    self.envia_email_sem_estrutura(caminho_pdf, arquivo_pdf, i)
                                 else:
-                                    if num_tipo != 80:
-                                        dados = (cod, descr, ref, um, num_conj, num_tipo, tipo, qtde_nec)
-                                        lista_final.append(dados)
+                                    self.envia_email_nao_acha_desenho(arquivo_pdf, cod)
+                            else:
+                                if qtde_nec > 0:
+                                    qtde_nec_f += qtde_nec
+
+                                    if num_tipo == 119:
+                                        estrutura = self.manipula_dados_tabela_estrutura(cod)
+
+                                        for ii in estrutura:
+                                            cod_f, descr_f, ref_f, um_f, qtde_f, saldo_f, num_conj_f, tipo_f, num_tipo_f = ii
+
+                                            qtde_nec_f, prod_sem_estr_f, prod_sem_des_f, duplicado_f = self.verifica_situacao_produto(cod_f, ref_f, saldo_f,
+                                                                                                                     num_conj_f,
+                                                                                                                     qtde_nec_f)
+                                            if duplicado_f:
+                                                self.envia_email_desenho_duplicado(cod, ref)
+                                            else:
+                                                if prod_sem_des_f:
+                                                    self.envia_email_nao_acha_desenho(ref_f, cod_f)
+                                                else:
+                                                    if prod_sem_estr_f:
+                                                        s_f = re.sub(r"[^\d.]", "", ref_f)
+                                                        s_f = re.sub(r"\.+$", "", s_f)
+
+                                                        caminho_pdf_f = rf"\\Publico\C\OP\Projetos\{s_f}.pdf"
+                                                        arquivo_pdf_f = f"{s_f}.pdf"
+
+                                                        if os.path.exists(caminho_pdf_f):
+                                                            self.envia_email_sem_estrutura(caminho_pdf_f, arquivo_pdf_f, ii)
+                                                        else:
+                                                            self.envia_email_nao_acha_desenho(arquivo_pdf_f, cod_f)
+                                                    else:
+                                                        if qtde_nec_f > 0:
+                                                            if num_tipo_f != 80:
+                                                                dados = (cod_f, descr_f, ref_f, um_f, num_conj_f, num_tipo_f, tipo_f, qtde_nec_f)
+                                                                lista_final.append(dados)
+                                    else:
+                                        if num_tipo != 80:
+                                            dados = (cod, descr, ref, um, num_conj, num_tipo, tipo, qtde_nec)
+                                            lista_final.append(dados)
 
                 if lista_final:
                     self.executar_tarefa(lista_final)
-
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -869,9 +872,10 @@ class ExecutaPlanoPcp:
             ultimo_req = int(ultimo_req1[0]) + 1
 
             cursor = conecta.cursor()
-            cursor.execute(f"Insert into ordemsolicitacao (IDSOLICITACAO, DATAEMISSAO, STATUS, OBS, NOME_PC) "
-                           f"values (GEN_ID(GEN_ORDEMSOLICITACAO_ID,1), "
-                           f"'{data_hoje}', 'A', '{observacao_certa}', '{nome_computador}');")
+            cursor.execute("""
+                INSERT INTO ordemsolicitacao (IDSOLICITACAO, DATAEMISSAO, STATUS, OBS, NOME_PC)
+                VALUES (GEN_ID(GEN_ORDEMSOLICITACAO_ID,1), ?, ?, ?, ?)
+            """, (data_hoje, 'A', observacao_certa, nome_computador))
 
             for indice, itens in enumerate(dados_itens, start=1):
                 cod, descr, ref, um, conjunto, num_tipo, tipo, qtde, ops_dest, vnd_dest = itens
@@ -1058,6 +1062,8 @@ class ExecutaPlanoPcp:
                 dados_prod = cursor.fetchall()
 
                 id_prod = dados_prod[0][0]
+
+                msg = msg.replace("\n", " ")[:200]
 
                 cursor = conecta.cursor()
                 cursor.execute(f"Insert into produtoordemsolicitacao (ID, MESTRE, ITEM, PRODUTO, QUANTIDADE, "
@@ -1599,16 +1605,31 @@ class ExecutaPlanoPcp:
         try:
             produto_sem_estrutura = False
             acabado_sem_desenho = False
+            prod_duplicado = False
 
             saldo_float = valores_para_float(saldo)
             qtde_necessidade -= saldo_float
 
             qtde_compra = self.manipula_dados_tabela_compra(cod)
             qtde_necessidade -= qtde_compra
+            qtde_necessidade = round(qtde_necessidade, 3)
 
             if num_conj == 10:
                 s = re.sub(r"[^\d.]", "", ref)
                 s = re.sub(r"\.+$", "", s)
+
+                cursor = conecta.cursor()
+                cursor.execute(
+                    f"SELECT DISTINCT codigo, descricao, COALESCE(obs, ''), unidade, COALESCE(tipomaterial, ''), "
+                    f"COALESCE(localizacao, ''), id_versao "
+                    f"FROM produto "
+                    f"WHERE obs = '{ref}';")
+                detalhes_produto = cursor.fetchall()
+
+                if detalhes_produto:
+                    qtde_itens = len(detalhes_produto)
+                    if qtde_itens > 1:
+                        prod_duplicado = True
 
                 caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
 
@@ -1620,14 +1641,16 @@ class ExecutaPlanoPcp:
                 if estrutura:
                     qtde_producao = self.manipula_dados_tabela_producao(cod)
                     qtde_necessidade -= qtde_producao
+                    qtde_necessidade = round(qtde_necessidade, 3)
+
                 else:
                     produto_sem_estrutura = True
 
             qtde_necessidade_ops = self.manipula_dados_tabela_consumo(cod)
-
             qtde_necessidade += qtde_necessidade_ops
+            qtde_necessidade = round(qtde_necessidade, 3)
 
-            return qtde_necessidade, produto_sem_estrutura, acabado_sem_desenho
+            return qtde_necessidade, produto_sem_estrutura, acabado_sem_desenho, prod_duplicado
 
 
         except Exception as e:
@@ -1693,8 +1716,6 @@ class ExecutaPlanoPcp:
 
     def manipula_dados_tabela_consumo(self, cod_prod):
         try:
-            tabela_nova = []
-
             qtde_necessidade = 0
 
             cursor = conecta.cursor()
@@ -1725,8 +1746,6 @@ class ExecutaPlanoPcp:
                     for ii in op_abertas:
                         emissao, num_op, cod_pai, descr_pai = ii
 
-                        emis = f'{emissao.day}/{emissao.month}/{emissao.year}'
-
                         cursor = conecta.cursor()
                         cursor.execute(f"SELECT estprod.id, prod.codigo, "
                                        f"((SELECT quantidade FROM ordemservico where numero = {num_op}) * "
@@ -1754,20 +1773,14 @@ class ExecutaPlanoPcp:
                                 for os_cons in select_os_resumo:
                                     cod_cons, descr_cons, qtde_cons_total = os_cons
 
-                                    dados = (emis, num_op, qtde_total, qtde_cons_total, cod_pai, descr_pai)
-                                    tabela_nova.append(dados)
-
                                     cons_float = valores_para_float(qtde_cons_total)
 
                                     qtde_necessidade += total_float - cons_float
                             else:
-                                dados = (emis, num_op, qtde_total, "0", cod_pai, descr_pai)
-                                tabela_nova.append(dados)
-
                                 qtde_necessidade += total_float
 
             if qtde_necessidade:
-                arred = round(qtde_necessidade, 2)
+                arred = round(qtde_necessidade, 3)
             else:
                 arred = 0
 
@@ -2030,6 +2043,8 @@ class ExecutaPlanoPcp:
             msg['From'] = email_user
             msg['Subject'] = subject
 
+            print(arquivo_pdf)
+
             body = f"{saudacao}\n\n" \
                    f"O desenho {arquivo_pdf} de código {cod} não foi encontrado no cadastro dos produtos.\n\n" \
                    f"{msg_final}"
@@ -2045,6 +2060,41 @@ class ExecutaPlanoPcp:
             server.quit()
 
             print("email enviado sem arquivo pdf desenho")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_desenho_duplicado(self, cod, ref):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'PLANO PCP - Foi encontrado produtos com desenho duplicado no cadastro!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\n" \
+                   f"Segue lista dos itens encontrados:\n\n"
+
+            body += f" - {cod} - {ref}.\n"
+
+            body += f"\n\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+
+            server.quit()
+
+            print(f'produto desenho duplicado enviada com sucesso!')
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

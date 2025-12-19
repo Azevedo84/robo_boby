@@ -106,7 +106,7 @@ class EnviaCadastroProduto:
             cursor.execute(f"SELECT id, registro, obs, descricao, descr_compl, referencia, um, ncm, "
                            f"kg_mt, fornecedor, data_criacao, codigo "
                            f"FROM PRODUTOPRELIMINAR "
-                           f"WHERE (codigo IS NOT NULL OR codigo <> 0) AND (entregue IS NULL OR entregue = '');")
+                           f"WHERE (codigo IS NOT NULL OR codigo <> 0) AND (entregue IS NULL OR entregue = '' OR entregue = 'N');")
             dados_banco = cursor.fetchall()
 
             if dados_banco:

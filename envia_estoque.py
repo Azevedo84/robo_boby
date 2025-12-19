@@ -201,7 +201,7 @@ class EnviaEstoqueFinal:
                         f"Se houver algum problema com o recebimento de emails, " \
                         f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
 
-            to = ['<maquinas@unisold.com.br>', '<estoque@acinplas.com.br>', '<fat_maq@unisold.com.br>']
+            to = ['<maquinas@unisold.com.br>', '<estoque@acinplas.com.br>']
 
             return saudacao, msg_final, to
 
