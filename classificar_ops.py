@@ -35,7 +35,7 @@ class ClassificarOps:
     def manipula_comeco(self):
         try:
             cursor = conecta.cursor()
-            cursor.execute(f"SELECT op.numero, op.codigo, op.id_estrutura, prod.descricao, "
+            cursor.execute(f"SELECT prod.id, op.numero, op.codigo, op.id_estrutura, prod.descricao, "
                            f"COALESCE(prod.obs, ''), "
                            f"prod.unidade, COALESCE(prod.tipomaterial, ''), op.quantidade, "
                            f"COALESCE(prod.id_servico_interno, '') "
@@ -46,11 +46,15 @@ class ClassificarOps:
 
             if ops_abertas:
                 for i in ops_abertas:
-                    print(i)
-                    num_op, cod, id_estrutura, descr, ref, um, tipo, qtde, id_servico = i
+                    id_produto, num_op, cod, id_estrutura, descr, ref, um, tipo, qtde, id_servico = i
 
-                    if not id_servico:
-                        print(i)
+                    cursor = conecta.cursor()
+                    cursor.execute(f"SELECT id, id_pedidointerno, tipo, numero, id_produto "
+                                   f"FROM VINCULO_PRODUTO_PI "
+                                   f"where numero = '{num_op}' and tipo = 'OP' "
+                                   f"and id_produto = {id_produto};")
+                    consulta_vinculos = cursor.fetchall()
+                    print(num_op, cod, consulta_vinculos)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
