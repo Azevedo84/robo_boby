@@ -39,8 +39,9 @@ class LimpaLocalSaldoZerado:
                 SELECT DISTINCT prod.id, prod.codigo, prod.localizacao
                 FROM movimentacao AS mov
                 INNER JOIN produto AS prod ON mov.produto = prod.id
-                WHERE prod.quantidade = 0 
-                AND prod.localizacao IS NOT NULL;
+                WHERE prod.quantidade = 0
+                AND prod.localizacao IS NOT NULL 
+                  AND prod.localizacao NOT LIKE 'A-%';
             """)
             dados_mov = cursor.fetchall()
 

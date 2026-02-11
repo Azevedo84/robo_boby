@@ -214,15 +214,12 @@ for codigo_produto in codigos:
             else:
                 totalz = 0
 
-            preco = (valores_para_float(totalz) + (valores_para_float(totalz) * 0.05)) / 0.7663
+            preco = (valores_para_float(totalz) + (valores_para_float(totalz) * 0.15)) / 0.7375
 
             valor_totau_dois = ("%.2f" % preco)
 
             dados = (codigo_produto, valor_totau_dois)
             lista_final_venda.append(dados)
-
-            if codigo_produto == 21423:
-                print(codigo_produto, valor_totau_dois)
 
 if lista_materiais_erros:
     workbook = Workbook()

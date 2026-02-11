@@ -21,8 +21,7 @@ class ExecutaPlanoPcp:
         self.resultado_sol_vinculos = {}
         self.resultado_req_vinculos = {}
         self.resultado_oc_vinculos = {}
-
-        # inicia processo
+        
         self.iniciar_tudo()
 
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):

@@ -12,10 +12,13 @@ from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Image, Spacer
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from dados_email import email_user, password
+
+import fitz
+import re
 
 
 class EnviaIndustrializacao:
@@ -43,6 +46,134 @@ class EnviaIndustrializacao:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+    def adicionar_tabelas_listagem(self, dados, cabecalho):
+        try:
+            elements = []
+
+            style_lista = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.gray),
+                                      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                                      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                                      ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                                      ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                                      ('FONTSIZE', (0, 0), (-1, 0), 10),
+                                      ('FONTSIZE', (0, 1), (-1, -1), 8)])
+
+            table = Table([cabecalho] + dados)
+            table.setStyle(style_lista)
+            elements.append(table)
+
+            return elements
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def gerar_pdf_listagem_separar(self, caminho_listagem, lista_final):
+        try:
+            nao_existe_desenho = False
+
+            margem_esquerda = 0
+            margem_direita = 5
+            margem_superior = 25
+            margem_inferior = 5
+
+            doc = SimpleDocTemplate(
+                caminho_listagem,
+                pagesize=A4,
+                leftMargin=margem_esquerda,
+                rightMargin=margem_direita,
+                topMargin=margem_superior,
+                bottomMargin=margem_inferior
+            )
+
+            elements = []
+
+            style_lista = TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.gray),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 1), (-1, -1), 8)
+            ])
+
+            # ---------- TÍTULO ----------
+            titulo = Table([['INDÚSTRIALIZAÇÃO']])
+            titulo.setStyle(style_lista)
+            elements.append(titulo)
+
+            espaco_em_branco = Table([[None]], style=[('SIZE', (0, 0), (0, 0), 20)])
+            elements.append(espaco_em_branco)
+
+            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'SALDO']
+
+            # ---------- PRODUTO POR PRODUTO ----------
+            for produto in lista_final:
+                cod, descr, ref, um, local, saldo = produto
+
+                # tabela do produto
+                dados_produto = [(cod, descr, ref, um, local, saldo)]
+                tabela_prod = Table([cabecalho_lista] + dados_produto)
+                tabela_prod.setStyle(style_lista)
+
+                elements.append(tabela_prod)
+                espaco_em_branquinho = Spacer(1, 10)
+                elements.append(espaco_em_branquinho)
+
+                # imagem do produto
+                caminho_img = self.gerar_imagem_projeto(cod, ref)
+
+                if caminho_img and os.path.exists(caminho_img):
+                    img = Image(caminho_img, width=80, height=50)
+                    elements.append(img)
+                    print("imagem adicionada:", cod, descr)
+
+                else:
+                    nao_existe_desenho = True
+
+                elements.append(espaco_em_branco)
+
+            # ---------- TABELAS FIXAS (TRANSPORTE / MEDIDAS / MOTORISTA) ----------
+            cabecalho_transp = ['', 'TRANSPORTE']
+            dados_transp = [('PESO LÍQUIDO', ''), ('PESO BRUTO', ''), ('VOLUME', '')]
+            elem_transp = self.adicionar_tabelas_listagem(dados_transp, cabecalho_transp)
+
+            cabecalho_medida = ['MEDIDAS', '']
+            dados_medida = [('ALTURA (MM)', ''), ('LARGURA (MM)', ''), ('COMPRIMENTO (MM)', '')]
+            elem_medida = self.adicionar_tabelas_listagem(dados_medida, cabecalho_medida)
+
+            cabecalho_motorista = ['DAMDFE', 'MOTORISTA']
+            dados_motorista = [('PLACA', ''), ('NOME', ''), ('CPF', '')]
+            elem_motorista = self.adicionar_tabelas_listagem(dados_motorista, cabecalho_motorista)
+
+            tabela_medida_motorista = Table(
+                [[elem_transp, elem_medida, elem_motorista]],
+                colWidths=[170, 170, 170]
+            )
+
+            elements.append(tabela_medida_motorista)
+
+            # ---------- GERAR PDF ----------
+            doc.build(elements)
+
+            # ---------- LIMPAR IMAGENS TEMP ----------
+            for produto in lista_final:
+                cod = produto[0]
+                temp = f"temp_{cod}.png"
+                if os.path.exists(temp):
+                    os.remove(temp)
+
+            return nao_existe_desenho
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
     def dados_email(self):
         try:
@@ -75,93 +206,10 @@ class EnviaIndustrializacao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def adicionar_tabelas_listagem(self, dados, cabecalho):
-        try:
-            elements = []
-
-            style_lista = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.gray),
-                                      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                      ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                                      ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                                      ('FONTSIZE', (0, 0), (-1, 0), 10),
-                                      ('FONTSIZE', (0, 1), (-1, -1), 8)])
-
-            table = Table([cabecalho] + dados)
-            table.setStyle(style_lista)
-            elements.append(table)
-
-            return elements
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def gerar_pdf_listagem_separar(self, caminho_listagem, lista_final):
-        try:
-            margem_esquerda = 0
-            margem_direita = 5
-            margem_superior = 25
-            margem_inferior = 5
-
-            doc = SimpleDocTemplate(caminho_listagem, pagesize=A4,
-                                    leftMargin=margem_esquerda,
-                                    rightMargin=margem_direita,
-                                    topMargin=margem_superior,
-                                    bottomMargin=margem_inferior)
-
-            titulo = ['INDÚSTRIALIZAÇÃO']
-            style_lista = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.gray),
-                                      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                                      ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                      ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                                      ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                                      ('FONTSIZE', (0, 0), (-1, 0), 10),
-                                      ('FONTSIZE', (0, 1), (-1, -1), 8)])
-
-            table = Table([titulo])
-            table.setStyle(style_lista)
-            elements = [table]
-
-            cabecalho_lista = ['CÓDIGO', 'DESCRIÇÃO', 'REFERÊNCIA', 'UM', 'LOCALIZAÇÃO', 'SALDO']
-            elem_lista = self.adicionar_tabelas_listagem(lista_final, cabecalho_lista)
-
-            cabecalho_transp = ['', 'TRANSPORTE']
-            dados_transp = [('PESO LÍQUIDO', ''), ('PESO BRUTO', ''), ('VOLUME', '')]
-            elem_transp = self.adicionar_tabelas_listagem(dados_transp, cabecalho_transp)
-
-            cabecalho_medida = ['MEDIDAS', '            ']
-            dados_medida = [('ALTURA (MM)', ''), ('LARGURA (MM)', ''), ('COMPRIMENTO (MM)', '')]
-            elem_medida = self.adicionar_tabelas_listagem(dados_medida, cabecalho_medida)
-
-            cabecalho_motorista = ['DAMDFE', 'MOTORISTA']
-            dados_motorista = [('PLACA', ''), ('NOME', ''), ('CPF', '')]
-            elem_motorista = self.adicionar_tabelas_listagem(dados_motorista, cabecalho_motorista)
-
-            espaco_em_branco = Table([[None]], style=[('SIZE', (0, 0), (0, 0), 20)])
-
-            # Criar tabela para colocar medidas e motorista lado a lado
-            tabela_medida_motorista = Table([[elem_transp, elem_medida, elem_motorista]],
-                                            colWidths=[170, 170])  # Ajuste as larguras conforme necessário
-
-            elementos = (elements + [espaco_em_branco] + elem_lista + [espaco_em_branco] +
-                         [tabela_medida_motorista])  # Adiciona a tabela com medidas e motorista lado a lado
-
-            doc.build(elementos)
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
     def inserir_no_banco(self, lista_banco):
         try:
             for i in lista_banco:
                 id_mov, cod = i
-
                 cursor = conecta_robo.cursor()
                 cursor.execute(f"Insert into ENVIA_INDUSTRIALIZACAO (ID, id_envia_mov, cod_prod) "
                                f"values (GEN_ID(GEN_ENVIA_INDUSTRIALIZACAO_ID,1), {id_mov}, {cod});")
@@ -243,70 +291,92 @@ class EnviaIndustrializacao:
             lista_banco = []
 
             cursor = conecta.cursor()
-            cursor.execute("""
-                SELECT id, data_mov 
-                FROM envia_mov 
-                WHERE data_mov >= DATEADD(-1 MONTH TO CURRENT_DATE)
-            """)
+            cursor.execute(f"SELECT mov.id, mov.data, prod.codigo, prod.descricao, COALESCE(prod.obs, ''), "
+                           f"prod.unidade, prod.localizacao, prod.quantidade "
+                           f"FROM movimentacao AS mov "
+                           f"INNER JOIN produto prod ON mov.produto = prod.id "
+                           f"WHERE mov.data >= DATEADD(-1 MONTH TO CURRENT_DATE) "
+                           f"and mov.tipo < 200;")
             dados_mov = cursor.fetchall()
 
             if dados_mov:
-                for i in dados_mov:
-                    id_mov, data_mov = i
+                for ii in dados_mov:
+                    id_mov, data_mov, cod, descr, ref, um, local, saldo = ii
 
-                    print(i)
+                    print(id_mov, data_mov, cod, descr, ref)
 
-                    cursor = conecta.cursor()
-                    cursor.execute(f"SELECT prod.codigo, prod.descricao, COALESCE(prod.obs, ''), "
-                                   f"prod.unidade, prod.localizacao, prod.quantidade "
-                                   f"FROM movimentacao AS mov "
-                                   f"INNER JOIN produto prod ON mov.produto = prod.id "
-                                   f"WHERE mov.data = '{data_mov}' and mov.tipo < 200;")
-                    dados_mov = cursor.fetchall()
+                    prod_saldo_encontrado = False
+                    for cod_sal_e, descr_e in lista_produtos:
+                        if cod_sal_e == cod:
+                            prod_saldo_encontrado = True
+                            break
 
-                    if dados_mov:
-                        for ii in dados_mov:
-                            cod, descr, ref, um, local, saldo = ii
+                    if not prod_saldo_encontrado:
+                        saldo_float = valores_para_float(saldo)
 
-                            prod_saldo_encontrado = False
-                            for cod_sal_e, descr_e in lista_produtos:
-                                if cod_sal_e == cod:
-                                    prod_saldo_encontrado = True
-                                    break
+                        if saldo_float > 0:
+                            dados_colhidos = self.manipula_dados_onde_usa(cod)
+                            if dados_colhidos:
+                                dados = (cod, descr)
 
-                            if not prod_saldo_encontrado:
-                                saldo_float = valores_para_float(saldo)
+                                lista_produtos.append(dados)
 
-                                if saldo_float > 0:
-                                    dados_colhidos = self.manipula_dados_onde_usa(cod)
-                                    if dados_colhidos:
-                                        dados = (cod, descr)
+                                cur = conecta_robo.cursor()
+                                cur.execute(f"SELECT * from ENVIA_INDUSTRIALIZACAO "
+                                            f"where id_envia_mov = {id_mov} and cod_prod = {cod};")
+                                dados_salvos = cur.fetchall()
 
-                                        lista_produtos.append(dados)
+                                if not dados_salvos:
+                                    dadoss = (cod, descr, ref, um, local, saldo)
+                                    lista_final.append(dadoss)
 
-                                        cur = conecta_robo.cursor()
-                                        cur.execute(f"SELECT * from ENVIA_INDUSTRIALIZACAO "
-                                                    f"where id_envia_mov = {id_mov} and cod_prod = {cod};")
-                                        dados_salvos = cur.fetchall()
-
-                                        if cod == "17814":
-                                            print("bbbbb", dados_salvos)
-
-                                        if not dados_salvos:
-                                            dadoss = (cod, descr, ref, um, local, saldo)
-                                            lista_final.append(dadoss)
-
-                                            dadosss = (id_mov, cod)
-                                            lista_banco.append(dadosss)
+                                    dadosss = (id_mov, cod)
+                                    lista_banco.append(dadosss)
 
             if lista_final:
                 arquivo = 'Listagem - Ind.pdf'
                 caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), arquivo)
 
-                self.gerar_pdf_listagem_separar(caminho, lista_final)
-                self.inserir_no_banco(lista_banco)
-                self.envia_email(caminho, arquivo)
-                self.excluir_arquivo(arquivo)
+                nao_existe_desenho = self.gerar_pdf_listagem_separar(caminho, lista_final)
+
+                if not nao_existe_desenho:
+                    self.inserir_no_banco(lista_banco)
+                    self.envia_email(caminho, arquivo)
+                    self.excluir_arquivo(arquivo)
+                else:
+                    self.envia_email_nao_acha_desenho(lista_final)
+                    self.excluir_arquivo(arquivo)
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_nao_acha_desenho(self, lista_final):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'INDUSTRIALIZACAO - Não foi encontrado o desenho'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\n" \
+                   f"{lista_final}\n\n" \
+                   f"{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            server.quit()
+
+            print("email enviado sem arquivo pdf desenho")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -358,6 +428,34 @@ class EnviaIndustrializacao:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def gerar_imagem_projeto(self, cod, ref):
+        try:
+            s = re.sub(r"[^\d.]", "", ref)
+            s = re.sub(r"\.+$", "", s)
+
+            caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+            caminho_png = rf"\\Publico\C\OP\Projetos\{cod}.png"
+
+            destino = f"temp_{cod}.png"
+
+            if os.path.exists(caminho_pdf):
+                doc = fitz.open(caminho_pdf)
+                page = doc.load_page(0)
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                pix.save(destino)
+                return destino
+
+            elif os.path.exists(caminho_png):
+                return caminho_png
+
+            return None
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
 
 
 chama_classe = EnviaIndustrializacao()

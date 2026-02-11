@@ -491,10 +491,10 @@ class EnviaOrdensProducao:
                 cursor = conecta.cursor()
                 cursor.execute(f"Insert into ordemservico "
                                f"(id, produto, numero, quantidade, datainicial, obs, codbarras, status, codigo, "
-                               f"dataprevisao, id_estrutura) "
+                               f"dataprevisao, id_estrutura, etapa) "
                                f"values (GEN_ID(GEN_ORDEMSERVICO_ID,1), {id_prod_int}, {self.num_op}, "
                                f"'{self.qtde_produto}', '{emissao_certo}', '{obs_certo}', '{cod_barras}', 'A', "
-                               f"'{self.cod_prod}', '{previsao}', {id_versao});")
+                               f"'{self.cod_prod}', '{previsao}', {id_versao}, 'ABERTA');")
 
                 conecta.commit()
 

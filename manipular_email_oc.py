@@ -21,6 +21,10 @@ import tempfile
 import time
 from datetime import datetime
 
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+
 
 class ManipularEmailOC:
     def __init__(self):
@@ -47,6 +51,163 @@ class ManipularEmailOC:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+    def dados_email(self):
+        try:
+            to = ['<maquinas@unisold.com.br>']
+
+            current_time = (datetime.now())
+            horario = current_time.strftime('%H')
+            hora_int = int(horario)
+            saudacao = ""
+            if 4 < hora_int < 13:
+                saudacao = "Bom Dia!"
+            elif 12 < hora_int < 19:
+                saudacao = "Boa Tarde!"
+            elif hora_int > 18:
+                saudacao = "Boa Noite!"
+            elif hora_int < 5:
+                saudacao = "Boa Noite!"
+
+            msg_final = ""
+
+            msg_final += f"Att,\n"
+            msg_final += f"Suzuki Máquinas Ltda\n"
+            msg_final += f"Fone (51) 3561.2583/(51) 3170.0965\n\n"
+            msg_final += f"🟦 Mensagem gerada automaticamente pelo sistema de Planejamento e Controle da Produção (PCP) do ERP Suzuki.\n"
+            msg_final += "🔸Por favor, não responda este e-mail diretamente."
+
+
+            return saudacao, msg_final, to
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
+
+    def envia_email_sem_requisicao(self, texto, cod_produto):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'SEM REQUISICAO DA OC - CÓDIGO DO PRODUTO NÃO TEM REQUISIÇÃO!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nO cód do produto Nª {cod_produto}, não está no texto da OC!\n\n"
+            body += f"{texto}\n\n"
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            server.quit()
+
+            print("email enviado sem REQUISIÇÃO")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_sem_codigo(self, texto, num_oc):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'SEM CÓDIGO DA OC - OC SEM IDENTIFICAR PRODUTOS!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nA OC Nª {num_oc}, não está no texto da OC!\n\n"
+            body += f"{texto}\n\n"
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            server.quit()
+
+            print("email enviado sem REQUISIÇÃO")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_sem_fornecedor(self, cod_forn, num_oc):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'SEM FORNECEDOR OC - CÓDIGO DO FORNECEDOR NÃO EXISTE!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nO cód do fornecedor Nª {cod_forn}, da OC {num_oc}não existe!\n\n"
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            server.quit()
+
+            print("email enviado sem fornecedor")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_valor_total_diferente(self, texto, valor_pdf, valor_somado, num_oc):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'VALOR DIVERGENTE OC - O VALOR TOTAL DO PDF DIFERENTE!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nO valro total do PDF da OC {num_oc} é de {valor_pdf} e a soma foi {valor_somado}!\n\n"
+            body += f"{texto}\n\n"
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            server.quit()
+
+            print("email enviado total diferente")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
     def imprimir_pdf_background(self, pdf_bytes, nome_base="OC_SUZUKI"):
         with tempfile.NamedTemporaryFile(
@@ -279,6 +440,108 @@ class ManipularEmailOC:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def extrair_codigo_produto(self, texto_item, debug=False):
+        try:
+            cursor = conecta.cursor()
+
+            # -------------------------------
+            # LIMPEZA FORTE DE NCM
+            # -------------------------------
+            texto_limpo = re.sub(
+                r'NCM\s*:\s*\d{6,8}',
+                '',
+                texto_item,
+                flags=re.IGNORECASE
+            )
+
+            # -------------------------------
+            # ESTRATÉGIAS (nome, peso, regex)
+            # -------------------------------
+            estrategias = [
+
+                # 1️⃣ Código após referência técnica (ex: 82.01.123.45 550312)
+                (
+                    "ref_tecnica",
+                    100,
+                    r'\b\d{2}\.\d{2}\.\d{3}\.\d{2}\s+(\d{4,6})\b'
+                ),
+
+                # 2️⃣ Linha do ITEM (layout padrão SIGER)
+                (
+                    "linha_item",
+                    95,
+                    r'^\s*\d+\s+\S+\s+\S+\s+(\d{4,6})\b',
+                ),
+
+                # 3️⃣ Palavra CÓDIGO explícita
+                (
+                    "palavra_codigo",
+                    90,
+                    r'C[ÓO]DIGO\s+(\d{4,6})'
+                ),
+
+                # 4️⃣ Fallback controlado (ainda necessário)
+                (
+                    "fallback_controlado",
+                    40,
+                    r'^\s*\d+\s+.*?\b(\d{4,6})\b'
+                ),
+            ]
+
+            candidatos = []
+
+            # -------------------------------
+            # EXECUTA TODAS AS ESTRATÉGIAS
+            # -------------------------------
+            for nome, peso, padrao in estrategias:
+                encontrados = re.findall(
+                    padrao,
+                    texto_limpo,
+                    re.IGNORECASE | re.MULTILINE
+                )
+
+                for codigo in encontrados:
+                    candidatos.append({
+                        "codigo": codigo,
+                        "peso": peso,
+                        "estrategia": nome
+                    })
+
+            if debug:
+                print("\n--- CANDIDATOS ENCONTRADOS ---")
+                for c in candidatos:
+                    print(c)
+
+            # -------------------------------
+            # ESCOLHA DO MELHOR CÓDIGO
+            # -------------------------------
+            for c in sorted(candidatos, key=lambda x: x["peso"], reverse=True):
+                cursor.execute(
+                    "SELECT 1 FROM produto WHERE codigo = ?",
+                    (c["codigo"],)
+                )
+
+                if cursor.fetchone():
+                    if debug:
+                        print(f"✔ Código escolhido: {c['codigo']} ({c['estrategia']})")
+                    return c["codigo"]
+
+            if debug:
+                print("✖ Nenhum código válido encontrado")
+
+            return None
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(
+                nome_funcao,
+                str(e),
+                self.nome_arquivo,
+                exc_traceback
+            )
+            return None
+
     def manipular_produtos_oc(self, texto):
         try:
             # --- BLOCO DE ITENS ---
@@ -292,8 +555,6 @@ class ManipularEmailOC:
 
             if bloco_itens:
                 bloco = bloco_itens.group(1)
-
-                # print("todo bloco:   ", bloco)
 
                 itens_brutos = re.findall(
                     r'''
@@ -310,37 +571,44 @@ class ManipularEmailOC:
                 unit = ""
 
                 for item_txt in itens_brutos:
+                    codigo_produto = self.extrair_codigo_produto(item_txt, debug=True)
+                    print("primeiro codigo extraido", codigo_produto)
 
-                    # Código do produto = primeiro número de 5 ou 6 dígitos
-                    cod_match = re.search(r'\b(\d{5,6})\b', item_txt)
-                    codigo_produto = cod_match.group(1) if cod_match else None
+                    if codigo_produto:
+                        cursor = conecta.cursor()
+                        cursor.execute(f"SELECT id, codigo, descricao FROM produto where codigo = {codigo_produto};")
+                        dados_produto = cursor.fetchall()
 
-                    dados_match = re.search(
-                        r'''
-                                                \n\s*([\d.,]+)\s+       # quantidade
-                                                ([A-Z]{1,3})\s+         # unidade
-                                                ([\d.,]+)\s+            # valor unitário
-                                                ([\d.,]+)\s+            # valor total
-                                                ([\d.,]+)\s+            # IPI
-                                                (\d{2}/\d{2}/\d{4})     # data entrega
-                                                ''',
-                        item_txt,
-                        re.VERBOSE
-                    )
+                        if dados_produto:
+                            codigo_produto = dados_produto[0][1]
 
-                    if dados_match:
-                        qtde = dados_match.group(1)
-                        unit = dados_match.group(3)
+                            dados_match = re.search(
+                                r'''
+                                                        \n\s*([\d.,]+)\s+       # quantidade
+                                                        ([A-Z]{1,3})\s+         # unidade
+                                                        ([\d.,]+)\s+            # valor unitário
+                                                        ([\d.,]+)\s+            # valor total
+                                                        ([\d.,]+)\s+            # IPI
+                                                        (\d{2}/\d{2}/\d{4})     # data entrega
+                                                        ''',
+                                item_txt,
+                                re.VERBOSE
+                            )
 
-                        itens.append({
-                            "codigo_produto": codigo_produto,
-                            "quantidade": dados_match.group(1),
-                            "unidade": dados_match.group(2),
-                            "vl_unitario": dados_match.group(3),
-                            "vl_total": dados_match.group(4),
-                            "ipi": dados_match.group(5),
-                            "data_entrega": dados_match.group(6)
-                        })
+                            if dados_match:
+                                qtde = dados_match.group(1)
+                                unit = dados_match.group(3)
+
+
+                                itens.append({
+                                    "codigo_produto": codigo_produto,
+                                    "quantidade": dados_match.group(1),
+                                    "unidade": dados_match.group(2),
+                                    "vl_unitario": dados_match.group(3),
+                                    "vl_total": dados_match.group(4),
+                                    "ipi": dados_match.group(5),
+                                    "data_entrega": dados_match.group(6)
+                                })
 
                 if not itens or not codigo_produto or not qtde or not unit:
                     itens = []
@@ -363,16 +631,25 @@ class ManipularEmailOC:
 
                         cod_match = re.search(r'(\d{5,6})', texto_item)
                         codigo_produto = cod_match.group(1) if cod_match else None
+                        print("segundo codigo extraido", codigo_produto)
 
-                        itens.append({
-                            "codigo_produto": codigo_produto,
-                            "quantidade": dados_match.group(1),
-                            "unidade": dados_match.group(2),
-                            "vl_unitario": dados_match.group(3),
-                            "vl_total": dados_match.group(4),
-                            "ipi": dados_match.group(5),
-                            "data_entrega": dados_match.group(6)
-                        })
+                        if codigo_produto:
+                            cursor = conecta.cursor()
+                            cursor.execute(f"SELECT id, codigo, descricao FROM produto where codigo = {codigo_produto};")
+                            dados_produto = cursor.fetchall()
+
+                            if dados_produto:
+                                codigo_produto = dados_produto[0][1]
+
+                                itens.append({
+                                    "codigo_produto": codigo_produto,
+                                    "quantidade": dados_match.group(1),
+                                    "unidade": dados_match.group(2),
+                                    "vl_unitario": dados_match.group(3),
+                                    "vl_total": dados_match.group(4),
+                                    "ipi": dados_match.group(5),
+                                    "data_entrega": dados_match.group(6)
+                                })
 
             return itens
 
@@ -393,11 +670,16 @@ class ManipularEmailOC:
             outras_despesas = self.mascara_outras_despesas(texto)
             descontos = self.mascara_desconto(texto)
 
+            print("Num ordem:", num_oc)
+
             itens = self.manipular_produtos_oc(texto)
 
             if num_oc and itens and codigo_forn:
-                dados = (num, pdf_bytes, num_oc, data_emissao, codigo_forn, total_geral, frete,
+                dados = (texto, num, pdf_bytes, num_oc, data_emissao, codigo_forn, total_geral, frete,
                          outras_despesas, descontos, itens)
+            else:
+                if num_oc:
+                    self.envia_email_sem_codigo(texto, num_oc)
 
             return dados
 
@@ -427,10 +709,17 @@ class ManipularEmailOC:
         try:
             obs_m = "OC LANÇADA PELO BOBY DE AZEVEDO"
             for i in lista_final_ocs:
-                num, pdf_bytes, num_oc, emissao, cod_forn, total_geral, frete, outras_despesas, descontos, itens = i
+                texto, num, pdf_bytes, num_oc, emissao, cod_forn, total_geral, frete, outras_despesas, descontos, itens = i
+
+                valor_total_oc = 0
 
                 frete_float = valores_para_float(frete)
                 descontos_float = valores_para_float(descontos)
+
+                valor_total_oc += frete_float
+                valor_total_oc -= descontos_float
+
+                total_geral_float = valores_para_float(total_geral)
 
                 emissao_fire = datetime.strptime(emissao, '%d/%m/%Y').date()
 
@@ -446,6 +735,7 @@ class ManipularEmailOC:
 
                     if not dados_fornecedor:
                         print(f'O Fornecedor {cod_forn} não está cadastrado!')
+                        self.envia_email_sem_fornecedor(cod_forn, num_oc)
                     else:
                         testar_erros = 0
 
@@ -474,6 +764,7 @@ class ManipularEmailOC:
                                 testar_erros += 1
                             elif not dados_req:
                                 print(f'O produto {cod_produto} não tem requisição')
+                                self.envia_email_sem_requisicao(texto, cod_produto)
                                 testar_erros += 1
                             elif len(dados_req) > 1:
                                 print(f'O produto {cod_produto} tem multiplas requisições')
@@ -507,6 +798,8 @@ class ManipularEmailOC:
                                 ipi = ii.get("ipi")
                                 entrega = ii.get("data_entrega")
 
+                                total_prod = ii.get("vl_total")
+
                                 dados_req = self.manipula_dados_req(cod_produto)
 
                                 num_req, item_req = dados_req[0]
@@ -517,6 +810,13 @@ class ManipularEmailOC:
                                 qtde_float = valores_para_float(qtde)
                                 unit_float = valores_para_float(unit)
                                 ipi_float = valores_para_float(ipi)
+
+                                total_prod_float = valores_para_float(total_prod)
+
+                                valor_total_oc += total_prod_float
+
+                                if ipi_float:
+                                    valor_total_oc += total_prod_float * (ipi_float / 100)
 
                                 cursor = conecta.cursor()
                                 cursor.execute(f"SELECT id, descricao FROM produto where codigo = {codigo_int};")
@@ -551,16 +851,20 @@ class ManipularEmailOC:
                                 cursor.execute(f"UPDATE produtoordemrequisicao SET STATUS = 'B', "
                                                f"PRODUZIDO = {qtde_float} WHERE id = {id_req};")
 
-                            conecta.commit()
+                            tolerancia = 2.00  # diferença máxima aceitável em reais
 
-                            print(f'Ordem de Compra Nº {num_oc} do {razao} foi lançada com sucesso!')
+                            if abs(valor_total_oc - total_geral_float) <= tolerancia:
+                                conecta.commit()
 
-                            self.imprimir_pdf_background(pdf_bytes)
+                                print(f'Ordem de Compra Nº {num_oc} do {razao} foi lançada com sucesso!')
+
+                                self.imprimir_pdf_background(pdf_bytes)
+                                imap.store(num, '+FLAGS', '\\Deleted')
+                            else:
+                                self.envia_email_valor_total_diferente(texto, total_geral_float, valor_total_oc, num_oc)
 
                 else:
                     print(f"Ordem de Compra Nº `{num_oc} já está lançada!")
-
-                imap.store(num, '+FLAGS', '\\Deleted')
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

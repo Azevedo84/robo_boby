@@ -182,3 +182,15 @@ def timestamp_brasileiro(data_e_tempo):
         exc_traceback = sys.exc_info()[2]
         trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
         return None
+
+
+def data_banco_para_brasileiro(data_banco):
+    try:
+        data_brasil = data_banco.strftime("%d/%m/%Y")
+
+        return data_brasil
+
+    except Exception as e:
+        nome_funcao = inspect.currentframe().f_code.co_name
+        exc_traceback = sys.exc_info()[2]
+        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)

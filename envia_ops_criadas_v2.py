@@ -617,6 +617,55 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def atualiza_etapa_pronto_producao(self, num_op):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT op.id, op.numero, op.codigo, op.id_estrutura "
+                           f"FROM ordemservico as op "
+                           f"where op.numero = {num_op};")
+            ops_abertas = cursor.fetchall()
+
+            if ops_abertas:
+                id_op, num_op, cod, id_estrut = ops_abertas[0]
+
+                cursor = conecta.cursor()
+                cursor.execute(f"UPDATE ordemservico SET etapa = 'PRODUCAO' "
+                               f"WHERE id = {id_op};")
+
+                conecta.commit()
+
+                print(f"OP {num_op} ALTERADA NA PRODUÇÃO")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def atualiza_etapa(self, num_op):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT op.id, op.numero, op.codigo, op.id_estrutura "
+                           f"FROM ordemservico as op "
+                           f"where op.numero = {num_op} "
+                           f"and op.etapa <> 'AGUARDANDO MATERIAL';")
+            ops_abertas = cursor.fetchall()
+
+            if ops_abertas:
+                id_op, num_op, cod, id_estrut = ops_abertas[0]
+
+                cursor = conecta.cursor()
+                cursor.execute(f"UPDATE ordemservico SET etapa = 'AGUARDANDO MATERIAL' "
+                               f"WHERE id = {id_op};")
+
+                conecta.commit()
+
+                print(f"OP {num_op} ALTERADA AGUARDANDO MATERIAL")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
     def adicionar_tabelas_listagem(self, dados, cabecalho):
         try:
             elements = []
@@ -805,6 +854,7 @@ class EnviaOrdensProducao:
                             if not select_status:
                                 self.envia_email_op_encerrada()
                                 self.inserir_no_banco()
+                                self.atualiza_etapa_pronto_producao(self.num_op)
                                 self.excluir_arquivo(self.caminho_original)
                             else:
                                 self.id_estrut = select_status[0][2]
@@ -829,9 +879,12 @@ class EnviaOrdensProducao:
                                             print("CONJUNTO")
                                             self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
                                             self.inserir_no_banco()
+                                            self.atualiza_etapa_pronto_producao(self.num_op)
                                             self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
                                             self.excluir_arquivo(self.caminho_original)
                                             self.excluir_arquivo(caminho_listagem)
+                                        else:
+                                            self.atualiza_etapa(self.num_op)
                                 else:
                                     if not foi_salvo_banco:
                                         if todo_material_consumido:
@@ -840,20 +893,26 @@ class EnviaOrdensProducao:
                                             if tot_estrut == tot_consumo:
                                                 print("USINAGEM EXCLUÍDA! FOI LANÇADO CONSUMO")
                                                 self.inserir_no_banco()
+                                                self.atualiza_etapa_pronto_producao(self.num_op)
                                                 self.excluir_arquivo(self.caminho_original)
                                             else:
                                                 if lista_subs:
                                                     print("USINAGEM COM SUBSTITUTO")
                                                     self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
                                                     self.inserir_no_banco()
+                                                    self.atualiza_etapa_pronto_producao(self.num_op)
                                                     self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
                                                     self.excluir_arquivo(self.caminho_original)
                                                     self.excluir_arquivo(caminho_listagem)
                                                 else:
                                                     print("USINAGEM")
                                                     self.inserir_no_banco()
+                                                    self.atualiza_etapa_pronto_producao(self.num_op)
                                                     self.envia_email_usinagem()
                                                     self.excluir_arquivo(self.caminho_original)
+
+                                        else:
+                                            self.atualiza_etapa(self.num_op)
 
 
                     except fdb.DatabaseError:
