@@ -389,6 +389,9 @@ class ConferenciaXmlNf:
                 "valor_icms": valores_para_float(dados_nf["totais"]["valor_icms"]),
                 "valor_frete": valores_para_float(dados_nf["totais"]["frete_total"]),
                 "valor_desconto": valores_para_float(dados_nf["totais"]["desconto_total"]),
+                "peso_bruto": valores_para_float(dados_nf["peso_bruto"]),
+                "peso_liquido": valores_para_float(dados_nf["peso_liquido"]),
+                "faturas": dados_nf["faturas"],
                 "itens": []
             }
 
@@ -608,6 +611,42 @@ class ConferenciaXmlNf:
             }
 
             # ==========================
+            # PESOS
+            # ==========================
+            peso_bruto = 0.0
+            peso_liquido = 0.0
+
+            for vol in infnfe.findall('nfe:transp/nfe:vol', ns):
+                pL = vol.findtext('nfe:pesoL', default='0', namespaces=ns)
+                pB = vol.findtext('nfe:pesoB', default='0', namespaces=ns)
+
+                try:
+                    peso_liquido += float(pL)
+                except:
+                    pass
+
+                try:
+                    peso_bruto += float(pB)
+                except:
+                    pass
+
+            # ==========================
+            # FATURAS / DUPLICATAS
+            # ==========================
+            faturas = []
+
+            for dup in infnfe.findall('nfe:cobr/nfe:dup', ns):
+                numero_dup = dup.findtext('nfe:nDup', default=None, namespaces=ns)
+                data_venc = dup.findtext('nfe:dVenc', default=None, namespaces=ns)
+                valor_dup = dup.findtext('nfe:vDup', default=None, namespaces=ns)
+
+                faturas.append({
+                    "numero": numero_dup,
+                    "vencimento": data_venc,
+                    "valor": valor_dup
+                })
+
+            # ==========================
             # PRODUTOS
             # ==========================
             produtos = []
@@ -647,6 +686,9 @@ class ConferenciaXmlNf:
                 "emitente": emitente,
                 "destinatario": destinatario,
                 "totais": totais,
+                "peso_bruto": peso_bruto,
+                "peso_liquido": peso_liquido,
+                "faturas": faturas,
                 "produtos": produtos
             }
 
@@ -654,6 +696,7 @@ class ConferenciaXmlNf:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
 
     def verifica_pre_ja_lancado(self, dados_pre_nota):
         try:
@@ -691,15 +734,17 @@ class ConferenciaXmlNf:
                 dados_pre_nota["valor_nf"],
                 dados_pre_nota["valor_frete"],
                 dados_pre_nota["valor_desconto"],
+                dados_pre_nota["peso_bruto"],
+                dados_pre_nota["peso_liquido"],
             )
             print("valores_pre", valores_pre)
 
             sql_pre = """
                 INSERT INTO PRE_NF_COMPRA (
-                ID, ID_FORNECEDOR, NUMERO_NF, 
-                DATA_EMISSAO, VALOR_PRODUTOS, VALOR_TOTAL, FRETE, DESCONTOS
+                ID, ID_FORNECEDOR, NUMERO_NF, DATA_EMISSAO, VALOR_PRODUTOS, VALOR_TOTAL, 
+                FRETE, DESCONTOS, PESO_BRUTO, PESO_LIQUIDO
                 )
-                VALUES (GEN_ID(GEN_PRE_NF_COMPRA_ID, 1), ?, ?, ?, ?, ?, ?, ?)
+                VALUES (GEN_ID(GEN_PRE_NF_COMPRA_ID, 1), ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING ID
                 """
 
@@ -727,8 +772,29 @@ class ConferenciaXmlNf:
                     )
                     VALUES (GEN_ID(GEN_PRE_NF_COMPRA_PRODUTOS_ID, 1), ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
-
                 cursor.execute(sql_pre_prod, valores_item)
+
+            faturas = dados_pre_nota["faturas"]
+            if faturas:
+                for fatura in faturas:
+                    data_venc_str = fatura["vencimento"]
+                    data_venc = datetime.fromisoformat(data_venc_str).date()
+
+                    valores_fatura = (
+                        id_pre_nota,
+                        data_venc,
+                        fatura["valor"],
+                    )
+
+                    print("valores_fatura", valores_fatura)
+
+                    sql_pre_prod = """
+                                        INSERT INTO PRE_NF_COMPRA_FATURAS (
+                                        ID, ID_NF_PRE, VENCIMENTO, VALOR)
+                                        VALUES (GEN_ID(GEN_PRE_NF_COMPRA_FATURAS_ID, 1), ?, ?, ?)
+                                        """
+                    cursor.execute(sql_pre_prod, valores_fatura)
+
 
             conecta.commit()
             print("NF LANÇADA!")
