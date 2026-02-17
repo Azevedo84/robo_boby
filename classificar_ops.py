@@ -4,7 +4,17 @@ from banco_dados.controle_erros import grava_erro_banco
 import os
 import traceback
 import inspect
-from datetime import datetime
+
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+from datetime import date, datetime
+
+
+import re
+import fitz
+from openpyxl.drawing.image import Image as XLImage
+from io import BytesIO
 
 
 class ClassificarOps:
@@ -123,16 +133,16 @@ class ClassificarOps:
                 num_op, pi, cod, descr, ref, um, qtde, previsao, servico = i
 
                 cursor = conecta.cursor()
-                cursor.execute(f"select ordser.datainicial, ordser.dataprevisao, ordser.numero, prod.codigo, "
+                cursor.execute(f"select ordser.id, ordser.datainicial, ordser.dataprevisao, ordser.numero, prod.codigo, "
                                f"prod.descricao, "
                                f"COALESCE(prod.obs, '') as obs, prod.unidade, "
-                               f"ordser.quantidade, ordser.id_estrutura, ordser.etapa "
+                               f"ordser.quantidade, ordser.id_estrutura, ordser.LOCAL_OP, prod.TIPOMATERIAL "
                                f"from ordemservico as ordser "
                                f"INNER JOIN produto prod ON ordser.produto = prod.id "
                                f"where ordser.status = 'A' and ordser.numero = '{num_op}';")
                 op_abertas = cursor.fetchall()
                 if op_abertas:
-                    emissao, previsao_aaa, op, cod, descr, ref, um, qtde, id_estrut, etapa = op_abertas[0]
+                    id_op, emissao, previsao_aaa, op, cod, descr, ref, um, qtde, id_estrut, local_op, tipo = op_abertas[0]
 
                     if id_estrut:
                         total_estrut = 0
@@ -167,22 +177,54 @@ class ClassificarOps:
 
                         msg = f"{total_estrut}/{total_consumo}"
 
-                        if total_estrut == total_consumo:
-                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg, etapa)
+                        esta_na_pasta = self.verifica_arquivos_aguardando(num_op)
+
+                        if esta_na_pasta:
+                            cursor = conecta.cursor()
+                            cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'ALMOX' "
+                                           f"WHERE id = {id_op};")
+
+                            conecta.commit()
+
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg, "ALMOX")
                             op_ab_editado.append(dados)
-                        else:
-                            if not servico:
-                                dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, "SEM SERVIÇO DEFINIDO", msg, etapa)
-                                op_ab_editado.append(dados)
-                            elif servico != "MONTAGEM" and servico != "SOLDA" and servico != "ELETRICO":
-                                dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, "CORTE", msg, etapa)
+                        elif local_op == "PROJETO":
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg, local_op)
+                            op_ab_editado.append(dados)
+                        elif local_op == "ALMOX":
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg, local_op)
+                            op_ab_editado.append(dados)
+                        elif not servico:
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg,
+                                     "SEM SERVIÇO DEFINIDO")
+                            op_ab_editado.append(dados)
+                        elif servico != "MONTAGEM" and servico != "SOLDA" and servico != "ELETRICO":
+                            if total_consumo == 0:
+                                dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg,
+                                         "LOC. CORTE")
                                 op_ab_editado.append(dados)
                             else:
-                                dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, "AGUARDANDO MATERIAL", msg, etapa)
+                                dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg,
+                                         "LOC. USINAGEM")
                                 op_ab_editado.append(dados)
+                        elif servico == "SOLDA":
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg, "LOC. SOLDA")
+                            op_ab_editado.append(dados)
+                        elif servico == "ELETRICO":
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg, "LOC. ELETRICA")
+                            op_ab_editado.append(dados)
+                        elif servico == "MONTAGEM":
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg,
+                                     "LOC. MONTAGEM")
+                            op_ab_editado.append(dados)
+                        else:
+                            dados = (num_op, pi, cod, descr, ref, um, qtde, previsao, servico, msg,
+                                     "NÃO SEI")
+                            op_ab_editado.append(dados)
 
             if op_ab_editado:
                 self.gerar_excel(op_ab_editado)
+                #self.gerar_power_point(op_ab_editado)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -191,81 +233,358 @@ class ClassificarOps:
 
     def gerar_excel(self, lista):
         try:
-            from openpyxl import Workbook
-            from openpyxl.styles import Alignment
-            from openpyxl.utils import get_column_letter
-            import os
-            from datetime import date, datetime
-
             desktop = os.path.join(os.path.expanduser("~"), "Desktop")
             arquivo = os.path.join(desktop, "ops_abertas.xlsx")
 
             wb = Workbook()
-            ws = wb.active
-            ws.title = "OPs Abertas"
+            wb.remove(wb.active)
 
             cabecalhos = [
-                "Número OP", "Nº PI", "Código Produto", "Descrição", "Observação",
-                "Unidade", "Quantidade", "Previsão", "Serviço Interno", "Consumo", "Etapa"
+                "Nº OP", "Nº PI", "Código", "Descrição", "Referência",
+                "UM", "Qtde", "Previsão", "Serviço Int.", "Consumo", "LOCAL_OP",
+                "Imagem"
             ]
-            ws.append(cabecalhos)
 
             alinhamento_central = Alignment(horizontal="center", vertical="center")
 
+            borda = Border(
+                left=Side(style="thin"),
+                right=Side(style="thin"),
+                top=Side(style="thin"),
+                bottom=Side(style="thin")
+            )
+
+            fonte_negrito = Font(bold=True)
+
+            fundo_cinza = PatternFill(
+                start_color="DDDDDD",
+                end_color="DDDDDD",
+                fill_type="solid"
+            )
+
+            abas = {}
+
+            # 🔹 Separar dados por aba
             for linha in lista:
-                num_op, pi, cod, descr, ref, um, qtde, previsao, servico, consumo, etapa = linha
+                num_op, pi, cod, descr, ref, um, qtde, previsao, servico, consumo, local_op = linha
 
-                # Código do produto como número (remove letras se existir)
-                try:
-                    cod = int(cod)
-                except:
-                    pass
+                if local_op and local_op.upper() == "PROJETO":
+                    nome_aba = "PROJETO"
+                elif local_op and local_op.upper() == "ALMOX":
+                    nome_aba = "ALMOX"
+                else:
+                    nome_aba = local_op if local_op else "SEM SERVIÇO"
 
-                ws.append([
-                    num_op,
-                    pi,
-                    cod,
-                    descr,
-                    ref,
-                    um,
-                    qtde,
-                    previsao,
-                    servico,
-                    consumo,
-                    etapa
-                ])
+                nome_aba = str(nome_aba)[:31]
 
-            # Formatação das células
-            for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-                for cell in row:
+                if nome_aba not in abas:
+                    abas[nome_aba] = []
+
+                abas[nome_aba].append(linha)
+
+            # 🔹 Criar abas
+            for nome_aba, dados_aba in abas.items():
+
+                dados_aba.sort(
+                    key=lambda x: x[7] if isinstance(x[7], (date, datetime)) else datetime.max
+                )
+
+                ws = wb.create_sheet(title=nome_aba)
+                ws.append(cabecalhos)
+
+                # Cabeçalho estilizado
+                for cell in ws[1]:
+                    cell.font = fonte_negrito
+                    cell.fill = fundo_cinza
                     cell.alignment = alinhamento_central
+                    cell.border = borda
 
-                    # Data em formato brasileiro
-                    if isinstance(cell.value, (date, datetime)):
-                        cell.number_format = "DD/MM/YYYY"
+                # 🔹 Inserir dados
+                for linha in dados_aba:
+                    num_op, pi, cod, descr, ref, um, qtde, previsao, servico, consumo, local_op = linha
 
-            # Centraliza cabeçalhos
-            for cell in ws[1]:
-                cell.alignment = alinhamento_central
+                    ws.append([
+                        num_op,
+                        pi,
+                        cod,
+                        descr,
+                        ref,
+                        um,
+                        qtde,
+                        previsao,
+                        servico,
+                        consumo,
+                        local_op,
+                        ""
+                    ])
 
-            # Ajusta largura das colunas automaticamente
-            for col in ws.columns:
-                max_length = 0
-                col_letter = get_column_letter(col[0].column)
+                    linha_excel = ws.max_row
 
-                for cell in col:
-                    if cell.value:
-                        max_length = max(max_length, len(str(cell.value)))
+                    # 🔹 Gerar imagem do PDF em memória
+                    s = re.sub(r"[^\d.]", "", str(ref))
+                    s = re.sub(r"\.+$", "", s)
 
-                ws.column_dimensions[col_letter].width = max_length + 2
+                    caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+
+                    if os.path.exists(caminho_pdf):
+
+                        try:
+                            doc = fitz.open(caminho_pdf)
+                            page = doc.load_page(0)
+                            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+
+                            img_bytes = BytesIO(pix.tobytes("png"))
+                            doc.close()
+
+                            img = XLImage(img_bytes)
+                            img.width = 120
+                            img.height = 90
+
+                            coluna_imagem = ws.max_column
+                            celula = f"{get_column_letter(coluna_imagem)}{linha_excel}"
+
+                            ws.add_image(img, celula)
+
+                            ws.row_dimensions[linha_excel].height = 70
+
+                        except:
+                            pass  # Se der erro no PDF, ignora e segue
+
+                # 🔹 Formatação dados (sem coluna imagem)
+                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=11):
+                    for cell in row:
+                        cell.alignment = alinhamento_central
+                        cell.border = borda
+
+                        if isinstance(cell.value, (date, datetime)):
+                            cell.number_format = "DD/MM/YYYY"
+
+                # 🔹 Ajuste largura automática (exceto imagem)
+                for col in ws.iter_cols(min_col=1, max_col=11):
+                    max_length = 0
+                    col_letter = get_column_letter(col[0].column)
+
+                    for cell in col:
+                        if cell.value:
+                            max_length = max(max_length, len(str(cell.value)))
+
+                    ws.column_dimensions[col_letter].width = max_length + 2
+
+                # 🔹 Largura fixa da coluna imagem
+                ws.column_dimensions[get_column_letter(ws.max_column)].width = 20
 
             wb.save(arquivo)
 
-            print("Excel Gerado!")
+            print("Excel Gerado com imagens!")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def gerar_power_point(self, lista):
+        try:
+            from pptx import Presentation
+            from pptx.util import Inches, Pt
+            from pptx.enum.text import PP_ALIGN
+            from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
+            from pptx.enum.text import MSO_AUTO_SIZE
+            from datetime import date, datetime
+            import os
+            import re
+            import fitz
+            from io import BytesIO
+
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+            arquivo = os.path.join(desktop, "painel_producao_tv.pptx")
+
+            prs = Presentation()
+            prs.slide_width = Inches(13.33)
+            prs.slide_height = Inches(7.5)
+
+            abas = {}
+
+            # 🔹 Separar por setor (igual seu Excel)
+            for linha in lista:
+                num_op, pi, cod, descr, ref, um, qtde, previsao, servico, consumo, local_op = linha
+
+                if local_op and local_op.upper() == "PROJETO":
+                    nome_aba = "PROJETO"
+                elif local_op and local_op.upper() == "ALMOX":
+                    nome_aba = "ALMOX"
+                else:
+                    nome_aba = local_op if local_op else "SEM SERVIÇO"
+
+                nome_aba = str(nome_aba)[:31]
+
+                if nome_aba not in abas:
+                    abas[nome_aba] = []
+
+                abas[nome_aba].append(linha)
+
+            # 🔹 Criar slide por setor
+            for nome_aba, dados_aba in abas.items():
+
+                # ordenar por previsão
+                dados_aba.sort(
+                    key=lambda x: x[7] if isinstance(x[7], (date, datetime)) else datetime.max
+                )
+
+                # pegar apenas as 4 primeiras prioridades
+                dados_aba = dados_aba[:4]
+
+                slide_layout = prs.slide_layouts[6]
+                slide = prs.slides.add_slide(slide_layout)
+
+                # Título setor
+                title = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(12), Inches(0.5))
+                tf_title = title.text_frame
+                tf_title.text = f"SETOR: {nome_aba}"
+                tf_title.paragraphs[0].font.size = Pt(32)
+                tf_title.paragraphs[0].font.bold = True
+
+                card_width = Inches(6.1)
+                card_height = Inches(3)
+
+                positions = [
+                    (Inches(0.5), Inches(1)),
+                    (Inches(6.7), Inches(1)),
+                    (Inches(0.5), Inches(4.2)),
+                    (Inches(6.7), Inches(4.2)),
+                ]
+
+                for pos, linha in zip(positions, dados_aba):
+
+                    num_op, pi, cod, descr, ref, um, qtde, previsao, servico, consumo, local_op = linha
+
+                    left, top = pos
+                    width = card_width
+                    height = card_height
+
+                    # cartão base
+                    card = slide.shapes.add_shape(
+                        MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
+                        left, top, width, height
+                    )
+                    card.line.width = Pt(2)
+
+                    # 🔹 inserir imagem do PDF
+                    s = re.sub(r"[^\d.]", "", str(ref))
+                    s = re.sub(r"\.+$", "", s)
+                    caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+
+                    # 🔹 proporção baseada no tamanho do card
+                    altura_imagem = card_height * 0.8
+                    altura_texto = card_height * 0.15
+
+                    if os.path.exists(caminho_pdf):
+                        try:
+                            doc = fitz.open(caminho_pdf)
+                            page = doc.load_page(0)
+                            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+                            img_bytes = BytesIO(pix.tobytes("png"))
+                            doc.close()
+
+                            # 🔹 IMAGEM GRANDE
+                            slide.shapes.add_picture(
+                                img_bytes,
+                                left + Inches(0.15),
+                                top + Inches(0.15),
+                                width=card_width - Inches(0.3),
+                                height=altura_imagem
+                            )
+                        except:
+                            pass
+
+                    # 🔹 TEXTO BEM EMBAIXO
+                    info = slide.shapes.add_textbox(
+                        left + Inches(0.15),
+                        top + Inches(0.15) + altura_imagem + Inches(0.05),
+                        card_width - Inches(0.3),
+                        altura_texto
+                    )
+
+                    tf = info.text_frame
+                    tf.clear()
+
+                    texto_prev = previsao.strftime("%d/%m/%Y") if isinstance(previsao, (date, datetime)) else ""
+
+                    p = tf.paragraphs[0]
+                    p.text = f"OP: {num_op} | PREV: {texto_prev} | QTDE: {qtde}"
+                    p.font.size = Pt(18)
+                    p.font.bold = True
+                    p.alignment = PP_ALIGN.CENTER
+
+            prs.save(arquivo)
+
+            print("Painel TV gerado com sucesso!")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def verifica_arquivos_aguardando(self, num_op_bc):
+        try:
+            esta_na_pasta = False
+
+            arquivos_pdf = self.procura_arquivos_aguarda_material()
+
+            numeros_op_processados = []
+            duplicados = []
+
+            for arq_original in arquivos_pdf:
+                dadinhos = arq_original[35:]
+
+                inicio = dadinhos.find("OP ")
+                dadinhos1 = dadinhos[inicio + 3:]
+
+                ini = dadinhos1.find(" - ")
+                num_op = dadinhos1[:ini]
+
+                if num_op in numeros_op_processados:
+                    duplicados.append(num_op)
+                else:
+                    numeros_op_processados.append(num_op)
+
+            if not duplicados:
+                for arq_original in arquivos_pdf:
+                    arq_original = arq_original[35:]
+
+                    inicio = arq_original.find("OP ")
+                    dadinhos1 = arq_original[inicio + 3:]
+
+                    ini = dadinhos1.find(" - ")
+                    num_op = dadinhos1[:ini]
+                    if str(num_op_bc) == num_op:
+                        esta_na_pasta = True
+                        break
+
+            return esta_na_pasta
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def procura_arquivos_aguarda_material(self):
+        try:
+            caminho = r'\\publico\C\OP\Aguardando Material/'
+            extensao = ".pdf"
+
+            arquivos_pdfs = []
+
+            for arquivo in os.listdir(caminho):
+                if arquivo.endswith(extensao):
+                    caminho_arquivo = os.path.join(caminho, arquivo)
+                    arquivos_pdfs.append(caminho_arquivo)
+
+            return arquivos_pdfs
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
 
 chama_classe = ClassificarOps()

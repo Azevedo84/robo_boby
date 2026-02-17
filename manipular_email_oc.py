@@ -338,6 +338,8 @@ class ManipularEmailOC:
 
                                             print(f"EMAIL DE ORDEM DE COMPRA")
                                             print(f"\n")
+                                    else:
+                                        print("NÃO É ORDEM DE COMPRA")
 
                         else:
                             print("EMAIL SEM ANEXO")

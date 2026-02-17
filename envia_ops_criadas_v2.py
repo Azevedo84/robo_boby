@@ -617,7 +617,50 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def atualiza_etapa_pronto_producao(self, num_op):
+    def atualiza_local_op_consumido(self, num_op):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT op.id, op.numero, op.codigo, op.id_estrutura, COALESCE(ser.descricao, '') "
+                           f"FROM ordemservico as op "
+                           f"INNER JOIN produto as prod ON op.produto = prod.id "
+                           f"LEFT JOIN SERVICO_INTERNO as ser ON ser.id = prod.id_servico_interno "
+                           f"where op.numero = {num_op};")
+            ops_abertas = cursor.fetchall()
+
+            if ops_abertas:
+                id_op, num_op, cod, id_estrut, servico = ops_abertas[0]
+
+                if servico != "MONTAGEM" and servico != "SOLDA" and servico != "ELETRICO":
+                    cursor = conecta.cursor()
+                    cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'LOC. USINAGEM' "
+                                   f"WHERE id = {id_op};")
+                elif servico == "SOLDA":
+                    cursor = conecta.cursor()
+                    cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'LOC. SOLDA' "
+                                   f"WHERE id = {id_op};")
+                elif servico == "ELETRICO":
+                    cursor = conecta.cursor()
+                    cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'LOC. ELETRICA' "
+                                   f"WHERE id = {id_op};")
+                elif servico == "MONTAGEM":
+                    cursor = conecta.cursor()
+                    cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'LOC. MONTAGEM' "
+                                   f"WHERE id = {id_op};")
+                else:
+                    cursor = conecta.cursor()
+                    cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'NÃO SEI' "
+                                   f"WHERE id = {id_op};")
+
+                conecta.commit()
+
+                print(f"OP {num_op} ALTERADA NA PRODUÇÃO")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def atualiza_local_op_encerrada(self, num_op):
         try:
             cursor = conecta.cursor()
             cursor.execute(f"SELECT op.id, op.numero, op.codigo, op.id_estrutura "
@@ -629,7 +672,7 @@ class EnviaOrdensProducao:
                 id_op, num_op, cod, id_estrut = ops_abertas[0]
 
                 cursor = conecta.cursor()
-                cursor.execute(f"UPDATE ordemservico SET etapa = 'PRODUCAO' "
+                cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'ENCERRADA' "
                                f"WHERE id = {id_op};")
 
                 conecta.commit()
@@ -641,25 +684,48 @@ class EnviaOrdensProducao:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def atualiza_etapa(self, num_op):
+    def atualiza_local_op_corte(self, num_op):
         try:
             cursor = conecta.cursor()
             cursor.execute(f"SELECT op.id, op.numero, op.codigo, op.id_estrutura "
                            f"FROM ordemservico as op "
-                           f"where op.numero = {num_op} "
-                           f"and op.etapa <> 'AGUARDANDO MATERIAL';")
+                           f"where op.numero = {num_op};")
             ops_abertas = cursor.fetchall()
 
             if ops_abertas:
                 id_op, num_op, cod, id_estrut = ops_abertas[0]
 
                 cursor = conecta.cursor()
-                cursor.execute(f"UPDATE ordemservico SET etapa = 'AGUARDANDO MATERIAL' "
+                cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'LOC. CORTE' "
                                f"WHERE id = {id_op};")
 
                 conecta.commit()
 
-                print(f"OP {num_op} ALTERADA AGUARDANDO MATERIAL")
+                print(f"OP {num_op} ALTERADA NO CORTE")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def atualiza_local_op_almox(self, num_op):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT op.id, op.numero, op.codigo, op.id_estrutura "
+                           f"FROM ordemservico as op "
+                           f"where op.numero = {num_op};")
+            ops_abertas = cursor.fetchall()
+
+            if ops_abertas:
+                id_op, num_op, cod, id_estrut = ops_abertas[0]
+
+                cursor = conecta.cursor()
+                cursor.execute(f"UPDATE ordemservico SET LOCAL_OP = 'ALMOX' "
+                               f"WHERE id = {id_op};")
+
+                conecta.commit()
+
+                print(f"OP {num_op} ALTERADA ALMOX")
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -854,7 +920,7 @@ class EnviaOrdensProducao:
                             if not select_status:
                                 self.envia_email_op_encerrada()
                                 self.inserir_no_banco()
-                                self.atualiza_etapa_pronto_producao(self.num_op)
+                                self.atualiza_local_op_encerrada(self.num_op)
                                 self.excluir_arquivo(self.caminho_original)
                             else:
                                 self.id_estrut = select_status[0][2]
@@ -879,12 +945,12 @@ class EnviaOrdensProducao:
                                             print("CONJUNTO")
                                             self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
                                             self.inserir_no_banco()
-                                            self.atualiza_etapa_pronto_producao(self.num_op)
+                                            self.atualiza_local_op_consumido(self.num_op)
                                             self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
                                             self.excluir_arquivo(self.caminho_original)
                                             self.excluir_arquivo(caminho_listagem)
                                         else:
-                                            self.atualiza_etapa(self.num_op)
+                                            self.atualiza_local_op_almox(self.num_op)
                                 else:
                                     if not foi_salvo_banco:
                                         if todo_material_consumido:
@@ -893,26 +959,26 @@ class EnviaOrdensProducao:
                                             if tot_estrut == tot_consumo:
                                                 print("USINAGEM EXCLUÍDA! FOI LANÇADO CONSUMO")
                                                 self.inserir_no_banco()
-                                                self.atualiza_etapa_pronto_producao(self.num_op)
+                                                self.atualiza_local_op_consumido(self.num_op)
                                                 self.excluir_arquivo(self.caminho_original)
                                             else:
                                                 if lista_subs:
                                                     print("USINAGEM COM SUBSTITUTO")
                                                     self.gerar_pdf_listagem_separar(caminho_listagem, lista_subs)
                                                     self.inserir_no_banco()
-                                                    self.atualiza_etapa_pronto_producao(self.num_op)
+                                                    self.atualiza_local_op_consumido(self.num_op)
                                                     self.envia_email_conjunto(caminho_listagem, arquivo_listagem)
                                                     self.excluir_arquivo(self.caminho_original)
                                                     self.excluir_arquivo(caminho_listagem)
                                                 else:
                                                     print("USINAGEM")
                                                     self.inserir_no_banco()
-                                                    self.atualiza_etapa_pronto_producao(self.num_op)
+                                                    self.atualiza_local_op_corte(self.num_op)
                                                     self.envia_email_usinagem()
                                                     self.excluir_arquivo(self.caminho_original)
 
                                         else:
-                                            self.atualiza_etapa(self.num_op)
+                                            self.atualiza_local_op_almox(self.num_op)
 
 
                     except fdb.DatabaseError:

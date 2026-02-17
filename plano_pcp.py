@@ -1438,7 +1438,7 @@ class ExecutaPlanoPcp:
                 cursor = conecta.cursor()
                 cursor.execute(f"Insert into ordemservico "
                                f"(id, produto, numero, quantidade, datainicial, obs, codbarras, status, codigo, "
-                               f"dataprevisao, id_estrutura, etapa) "
+                               f"dataprevisao, id_estrutura, LOCAL_OP) "
                                f"values (GEN_ID(GEN_ORDEMSERVICO_ID,1), {id_prod_int}, {num_op}, "
                                f"'{qtde_produto}', '{emissao}', '{obs_certo}', '{cod_barras}', 'A', "
                                f"'{cod_prod}', '{previsao}', {id_versao}, 'ABERTA');")
