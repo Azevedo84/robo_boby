@@ -14,6 +14,9 @@ class PcpPrevisao:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
+        nome_base = os.path.splitext(self.nome_arquivo)[0]
+        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
         data_inicio = date.today() + timedelta(1)
         dia_da_semana = data_inicio.weekday()
@@ -38,11 +41,12 @@ class PcpPrevisao:
 
             traceback.print_exc()
             print(f'Houve um problema no arquivo: {arquivo} na função: "{nome_funcao}"\n{mensagem} {num_linha_erro}')
-            print(f'Houve um problema no arquivo:\n\n{arquivo}\n\n'
-                  f'Comunique o desenvolvedor sobre o problema descrito abaixo:\n\n'
-                  f'{nome_funcao}: {mensagem}')
 
             grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
+
+            # 'Log' em arquivo local apenas se houver erro
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(f"Erro na função {nome_funcao} do arquivo {arquivo}: {mensagem} (linha {num_linha_erro})\n")
 
         except Exception as e:
             nome_funcao_trat = inspect.currentframe().f_code.co_name
@@ -52,6 +56,10 @@ class PcpPrevisao:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(
+                    f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
 
     def retorna_calculo_meses(self, dados_tabela):
         try:

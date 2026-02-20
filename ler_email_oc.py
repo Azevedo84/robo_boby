@@ -6,8 +6,6 @@ import os
 import traceback
 import inspect
 from dados_email import email_user, password
-
-
 import imaplib
 import email
 from email.header import decode_header
@@ -15,12 +13,10 @@ from email.utils import parseaddr
 from io import BytesIO
 from PyPDF2 import PdfReader
 import re
-
 import subprocess
 import tempfile
 import time
 from datetime import datetime
-
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
@@ -30,6 +26,9 @@ class ManipularEmailOC:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
+        nome_base = os.path.splitext(self.nome_arquivo)[0]
+        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
         self.manipula_comeco()
 
@@ -43,6 +42,10 @@ class ManipularEmailOC:
 
             grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
 
+            # 'Log' em arquivo local apenas se houver erro
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(f"Erro na função {nome_funcao} do arquivo {arquivo}: {mensagem} (linha {num_linha_erro})\n")
+
         except Exception as e:
             nome_funcao_trat = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
@@ -51,6 +54,10 @@ class ManipularEmailOC:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(
+                    f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
 
     def dados_email(self):
         try:
@@ -158,7 +165,7 @@ class ManipularEmailOC:
             msg['From'] = email_user
             msg['Subject'] = subject
 
-            body = f"{saudacao}\n\nO cód do fornecedor Nª {cod_forn}, da OC {num_oc}não existe!\n\n"
+            body = f"{saudacao}\n\nO cód do fornecedor Nª {cod_forn}, da OC {num_oc} não existe!\n\n"
             body += f"\n{msg_final}"
 
             msg.attach(MIMEText(body, 'plain'))

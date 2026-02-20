@@ -1,6 +1,7 @@
 import sys
 from banco_dados.conexao import conecta
 from banco_dados.controle_erros import grava_erro_banco
+from dados_email import email_user, password
 import os
 import traceback
 import inspect
@@ -16,11 +17,21 @@ import fitz
 from openpyxl.drawing.image import Image as XLImage
 from io import BytesIO
 
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email.header import Header
+from email import encoders
+
 
 class ClassificarOps:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
+        nome_base = os.path.splitext(self.nome_arquivo)[0]
+        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
         self.manipula_comeco()
 
@@ -34,6 +45,10 @@ class ClassificarOps:
 
             grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
 
+            # 'Log' em arquivo local apenas se houver erro
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(f"Erro na função {nome_funcao} do arquivo {arquivo}: {mensagem} (linha {num_linha_erro})\n")
+
         except Exception as e:
             nome_funcao_trat = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
@@ -42,6 +57,97 @@ class ClassificarOps:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(
+                    f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
+
+    def dados_email(self):
+        try:
+            to = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+
+            current_time = (datetime.now())
+            horario = current_time.strftime('%H')
+            hora_int = int(horario)
+            saudacao = ""
+            if 4 < hora_int < 13:
+                saudacao = "Bom Dia!"
+            elif 12 < hora_int < 19:
+                saudacao = "Boa Tarde!"
+            elif hora_int > 18:
+                saudacao = "Boa Noite!"
+            elif hora_int < 5:
+                saudacao = "Boa Noite!"
+
+            msg_final = f"Att,\n" \
+                        f"Suzuki Máquinas Ltda\n" \
+                        f"Fone (51) 3561.2583/(51) 3170.0965\n\n" \
+                        f"Mensagem enviada automaticamente, por favor não responda.\n\n" \
+                        f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
+                        f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
+
+            return saudacao, msg_final, to
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def envia_email_excel(self, arquivo):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            to = ['<maquinas@unisold.com.br>']
+
+            subject = f'Classificação das Ordens de Produção'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\n" \
+                   f"Segue em anexo lista de localização e classificação das Ordens de Produção.\n\n" \
+                   f"{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+
+            attachment = open(arquivo, 'rb')
+
+            part = MIMEBase('application', "octet-stream")
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', 'attachment', filename=Header(arquivo, 'utf-8').encode())
+            msg.attach(part)
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, to, text)
+            attachment.close()
+
+            server.quit()
+
+            print(f'Email enviada com sucesso!')
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def excluir_arquivo(self, caminho_arquivo):
+        try:
+            if os.path.exists(caminho_arquivo):
+                os.remove(caminho_arquivo)
+            else:
+                print("O arquivo não existe no caminho especificado.")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
     def manipula_comeco(self):
         try:
@@ -223,7 +329,11 @@ class ClassificarOps:
                             op_ab_editado.append(dados)
 
             if op_ab_editado:
-                self.gerar_excel(op_ab_editado)
+                arquivo = "ops_abertas.xlsx"
+
+                self.gerar_excel(arquivo, op_ab_editado)
+                self.envia_email_excel(arquivo)
+                self.excluir_arquivo(arquivo)
                 #self.gerar_power_point(op_ab_editado)
 
         except Exception as e:
@@ -231,11 +341,8 @@ class ClassificarOps:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def gerar_excel(self, lista):
+    def gerar_excel(self, arquivo, lista):
         try:
-            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-            arquivo = os.path.join(desktop, "ops_abertas.xlsx")
-
             wb = Workbook()
             wb.remove(wb.active)
 
@@ -329,11 +436,19 @@ class ClassificarOps:
                     if os.path.exists(caminho_pdf):
 
                         try:
+                            from PIL import Image
                             doc = fitz.open(caminho_pdf)
                             page = doc.load_page(0)
                             pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
 
-                            img_bytes = BytesIO(pix.tobytes("png"))
+                            # Converte pixmap para imagem PIL
+                            img_pil = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+                            # Salva como JPEG com compressão
+                            img_bytes = BytesIO()
+                            img_pil.save(img_bytes, format="JPEG", quality=40, optimize=True)
+                            img_bytes.seek(0)
+
                             doc.close()
 
                             img = XLImage(img_bytes)

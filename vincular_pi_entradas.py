@@ -16,6 +16,9 @@ class ExecutaPlanoPcp:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
+        nome_base = os.path.splitext(self.nome_arquivo)[0]
+        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
         self.resultado_ops_vinculos = {}
         self.resultado_sol_vinculos = {}
@@ -34,6 +37,10 @@ class ExecutaPlanoPcp:
 
             grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
 
+            # 'Log' em arquivo local apenas se houver erro
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(f"Erro na função {nome_funcao} do arquivo {arquivo}: {mensagem} (linha {num_linha_erro})\n")
+
         except Exception as e:
             nome_funcao_trat = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
@@ -42,6 +49,10 @@ class ExecutaPlanoPcp:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(
+                    f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
 
     def buscar_vendas_e_consumos(self, codigo_produto, lista_final, visitados):
         try:
@@ -171,7 +182,7 @@ class ExecutaPlanoPcp:
                     # conjunto para evitar ciclos nesta árvore (por OP)
                     visitados = set()
 
-                    # Chama a recursão que vai subir (filho -> pai -> avô...) e
+                    # Chama a recursão que vai subir (filho - pai - avô...) e
                     # juntar todas as vendas encontradas em vincular_pedido_interno
                     self.buscar_vendas_e_consumos(cod, vincular_pedido_interno, visitados)
 
@@ -228,7 +239,7 @@ class ExecutaPlanoPcp:
                     # conjunto para evitar ciclos nesta árvore (por OP)
                     visitados = set()
 
-                    # Chama a recursão que vai subir (filho -> pai -> avô...) e
+                    # Chama a recursão que vai subir (filho - pai - avô...) e
                     # juntar todas as vendas encontradas em vincular_pedido_interno
                     self.buscar_vendas_e_consumos(cod_prod_i, vincular_pedido_interno, visitados)
 
@@ -285,7 +296,7 @@ class ExecutaPlanoPcp:
                     # conjunto para evitar ciclos nesta árvore (por OP)
                     visitados = set()
 
-                    # Chama a recursão que vai subir (filho -> pai -> avô...) e
+                    # Chama a recursão que vai subir (filho - pai - avô...) e
                     # juntar todas as vendas encontradas em vincular_pedido_interno
                     self.buscar_vendas_e_consumos(cod_prod_i, vincular_pedido_interno, visitados)
 
@@ -348,7 +359,7 @@ class ExecutaPlanoPcp:
                     # conjunto para evitar ciclos nesta árvore (por OP)
                     visitados = set()
 
-                    # Chama a recursão que vai subir (filho -> pai -> avô...) e
+                    # Chama a recursão que vai subir (filho - pai - avô...) e
                     # juntar todas as vendas encontradas em vincular_pedido_interno
                     self.buscar_vendas_e_consumos(cod_prod_i, vincular_pedido_interno, visitados)
 

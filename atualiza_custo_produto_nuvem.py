@@ -11,7 +11,8 @@ class AtualizaCustoDaNuvem:
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
         self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
-        self.arquivo_log = os.path.join(self.diretorio_script, "atualiza_custo_produto_nuvem_erros.txt")
+        nome_base = os.path.splitext(self.nome_arquivo)[0]
+        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
         self.inicia_processo()
 

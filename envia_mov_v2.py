@@ -26,6 +26,9 @@ class EnviaMovimentacao:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
+        nome_base = os.path.splitext(self.nome_arquivo)[0]
+        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
@@ -37,6 +40,10 @@ class EnviaMovimentacao:
 
             grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
 
+            # 'Log' em arquivo local apenas se houver erro
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(f"Erro na função {nome_funcao} do arquivo {arquivo}: {mensagem} (linha {num_linha_erro})\n")
+
         except Exception as e:
             nome_funcao_trat = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
@@ -45,6 +52,10 @@ class EnviaMovimentacao:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
+
+            with open(self.arquivo_log, "a", encoding="utf-8") as f:
+                f.write(
+                    f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
 
     def mensagem_email(self):
         try:
@@ -853,7 +864,7 @@ class EnviaMovimentacao:
                 lanca_dados_mesclado(f'L{linhas_certas3}:M{linhas_certas3}', f'l{linhas_certas3}', "Total Mov.", 12,
                                      True)
 
-                # para escrever só os valores em um lugar específico:
+                # para escrever só os valores num lugar específico:
                 df.to_excel(writer, sheet_name=aba_sheet, startrow=13, startcol=1, header=False, index=False)
                 df1.to_excel(writer, sheet_name=aba_sheet, startrow=13, startcol=7, header=False, index=False)
                 df2.to_excel(writer, sheet_name=aba_sheet, startrow=13, startcol=9, header=False, index=False)
@@ -928,7 +939,7 @@ class EnviaMovimentacao:
                         horizontal=Side(border_style='thin', color='00000000')
                     )
 
-            # para escrever só os valores em um lugar específico:
+            # para escrever só os valores num lugar específico:
             df.to_excel(writer, sheet_name=aba_sheet, startrow=5, startcol=0, header=False, index=False)
 
             writer.save()

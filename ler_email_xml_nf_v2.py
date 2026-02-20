@@ -7,10 +7,8 @@ import os
 import traceback
 import inspect
 import xml.etree.ElementTree as ET # noqa
-from typing import Any
 import re
 from datetime import datetime
-
 import email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,6 +32,9 @@ class ConferenciaXmlNf:
         self.caminho_poppler = r'C:\Program Files\poppler-24.08.0\Library\bin'
 
         self.pasta_xml = r"C:/pasta_nf"
+
+        # noinspection HttpUrlsUsage
+        self.nfe_ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
 
         self.cnpj_maquinas = "93183853000197"
 
@@ -65,6 +66,7 @@ class ConferenciaXmlNf:
             with open(self.arquivo_log, "a", encoding="utf-8") as f:
                 f.write(
                     f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
+
     def manipula_comeco(self):
         try:
             ids, imap = self.verificando_emails_caixa_entrada()
@@ -94,7 +96,7 @@ class ConferenciaXmlNf:
             status, _ = imap.select("INBOX")
             print("SELECT STATUS:", status)
 
-            # Busca todos os e-mails
+            # Busca todos os emails
             status, data = imap.search(None, "ALL")
             ids = data[0].split()
             print(f"Encontrados {len(ids)} emails na caixa de entrada\n")
@@ -174,6 +176,19 @@ class ConferenciaXmlNf:
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
             return []
 
+    def obter_root_e_inf(self, xml_bytes):
+        try:
+            root = ET.fromstring(xml_bytes)
+            infnfe = root.find('.//nfe:infNFe', self.nfe_ns)
+
+            return root, infnfe
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
+
     def processar_xmls(self, lista_xmls):
         try:
             for email_data in lista_xmls:
@@ -191,22 +206,19 @@ class ConferenciaXmlNf:
                 erros = []
 
                 dados_nf = self.ler_nfe_xml(xml_bytes)
+                print(dados_nf)
 
                 if not dados_nf:
                     print("Erro ao ler NF.")
                     continue
 
-                dados_fornecedor, erros = self.conferir_dados_gerais(dados_nf, erros)
+                dados_for_cliente, erros = self.conferir_fornecedor_cliente(dados_nf, erros)
 
-                if not dados_fornecedor:
+                if not dados_for_cliente:
                     msg = "Fornecedor inválido."
                     print(msg)
                     self.envia_email_erros_nf(erros, msg, anexos_email)
                     continue
-
-                dados_pre_nota, erros = self.conferir_dados_produtos(
-                    dados_fornecedor, dados_nf, erros
-                )
 
                 if erros:
                     msg = "⚠ NF COM DIVERGÊNCIAS"
@@ -215,16 +227,220 @@ class ConferenciaXmlNf:
                 else:
                     print("✅ NF VALIDADA COM SUCESSO!")
 
-                    dados_nf_bc = self.verifica_pre_ja_lancado(dados_pre_nota)
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-                    if not dados_nf_bc:
-                        self.salvar_pre_nota(dados_pre_nota)
-                    else:
-                        erro = []
-                        msg = "⚠ NF JÁ FOI SALVA NA TABELA PRÉ LANÇAMENTO"
-                        erro.append(msg)
-                        print(msg)
-                        self.envia_email_erros_nf(erro, msg, anexos_email)
+    def verifica_se_e_nfe(self, xml_bytes):
+        try:
+            root, infnfe = self.obter_root_e_inf(xml_bytes)
+            return infnfe is not None
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return False
+
+    def ler_nfe_xml(self, xml_bytes: bytes) -> dict | None:
+        try:
+            root, infnfe = self.obter_root_e_inf(xml_bytes)
+
+            if infnfe is None:
+                return None
+
+            ns = self.nfe_ns
+
+            # ==========================
+            # CHAVE DA NF
+            # ==========================
+            chave = infnfe.attrib.get("Id", "").replace("NFe", "")
+
+            # ==========================
+            # IDE
+            # ==========================
+            numero = infnfe.findtext('nfe:ide/nfe:nNF', None, ns)
+            serie = infnfe.findtext('nfe:ide/nfe:serie', None, ns)
+            data_emissao = infnfe.findtext('nfe:ide/nfe:dhEmi', None, ns)
+            nat_op = infnfe.findtext('nfe:ide/nfe:natOp', None, ns)
+            tp_nf = infnfe.findtext('nfe:ide/nfe:tpNF', None, ns)
+            cuf = infnfe.findtext('nfe:ide/nfe:cUF', None, ns)
+
+            # ==========================
+            # EMITENTE
+            # ==========================
+            emit = infnfe.find('nfe:emit', ns)
+
+            emitente = {
+                "cnpj": emit.findtext('nfe:CNPJ', None, ns) if emit is not None else None,
+                "nome": emit.findtext('nfe:xNome', None, ns) if emit is not None else None,
+                "fantasia": emit.findtext('nfe:xFant', None, ns) if emit is not None else None,
+                "uf": emit.findtext('nfe:enderEmit/nfe:UF', None, ns) if emit is not None else None,
+                "pais": emit.findtext('nfe:enderEmit/nfe:xPais', None, ns) if emit is not None else None,
+            }
+
+            # ==========================
+            # DESTINATÁRIO
+            # ==========================
+            dest = infnfe.find('nfe:dest', ns)
+
+            destinatario = {
+                "cnpj": dest.findtext('nfe:CNPJ', None, ns) if dest is not None else None,
+                "cpf": dest.findtext('nfe:CPF', None, ns) if dest is not None else None,
+                "nome": dest.findtext('nfe:xNome', None, ns) if dest is not None else None,
+                "uf": dest.findtext('nfe:enderDest/nfe:UF', None, ns) if dest is not None else None,
+                "pais": dest.findtext('nfe:enderDest/nfe:xPais', None, ns) if dest is not None else None,
+            }
+
+            # ==========================
+            # TOTAIS
+            # ==========================
+            total = infnfe.find('nfe:total/nfe:ICMSTot', ns)
+
+            totais = {}
+            if total is not None:
+                for tag in [
+                    "vProd", "vNF", "vICMS", "vICMSST", "vIPI",
+                    "vFrete", "vSeg", "vDesc", "vOutro"
+                ]:
+                    totais[tag] = total.findtext(f'nfe:{tag}', None, ns)
+
+            # ==========================
+            # TRANSPORTE
+            # ==========================
+            transp = infnfe.find('nfe:transp', ns)
+
+            transportadora = {
+                "cnpj": None,
+                "nome": None,
+                "qVol": 0,
+                "esp": [],
+                "peso_bruto": 0.0,
+                "peso_liquido": 0.0
+            }
+
+            if transp is not None:
+                transporta = transp.find('nfe:transporta', ns)
+
+                if transporta is not None:
+                    transportadora["cnpj"] = transporta.findtext('nfe:CNPJ', None, ns)
+                    transportadora["nome"] = transporta.findtext('nfe:xNome', None, ns)
+
+                for vol in transp.findall('nfe:vol', ns):
+                    qvol = vol.findtext('nfe:qVol', '0', ns)
+                    esp = vol.findtext('nfe:esp', None, ns)
+                    pl = vol.findtext('nfe:pesoL', '0', ns)
+                    pb = vol.findtext('nfe:pesoB', '0', ns)
+
+                    try:
+                        transportadora["qVol"] += int(qvol)
+                    except (ValueError, TypeError):
+                        pass
+
+                    if esp:
+                        transportadora["esp"].append(esp)
+
+                    try:
+                        transportadora["peso_liquido"] += float(pl)
+                    except (ValueError, TypeError):
+                        pass
+
+                    try:
+                        transportadora["peso_bruto"] += float(pb)
+                    except (ValueError, TypeError):
+                        pass
+
+            # ==========================
+            # FATURAS
+            # ==========================
+            faturas = []
+            for dup in infnfe.findall('nfe:cobr/nfe:dup', ns):
+                faturas.append({
+                    "numero": dup.findtext('nfe:nDup', None, ns),
+                    "vencimento": dup.findtext('nfe:dVenc', None, ns),
+                    "valor": dup.findtext('nfe:vDup', None, ns)
+                })
+
+            # ==========================
+            # INFORMAÇÕES ADICIONAIS
+            # ==========================
+            inf_adic = infnfe.find('nfe:infAdic', ns)
+
+            informacoes_adicionais = {
+                "infAdFisco": None,
+                "infCpl": None
+            }
+
+            if inf_adic is not None:
+                informacoes_adicionais["infAdFisco"] = inf_adic.findtext('nfe:infAdFisco', None, ns)
+                informacoes_adicionais["infCpl"] = inf_adic.findtext('nfe:infCpl', None, ns)
+
+            # ==========================
+            # RESPONSÁVEL TÉCNICO
+            # ==========================
+            resp_tec = infnfe.find('nfe:infRespTec', ns)
+
+            responsavel_tecnico = None
+            if resp_tec is not None:
+                responsavel_tecnico = {
+                    "cnpj": resp_tec.findtext('nfe:CNPJ', None, ns),
+                    "contato": resp_tec.findtext('nfe:xContato', None, ns),
+                    "email": resp_tec.findtext('nfe:email', None, ns),
+                    "fone": resp_tec.findtext('nfe:fone', None, ns),
+                }
+
+            # ==========================
+            # PRODUTOS
+            # ==========================
+            produtos = []
+
+            for det in infnfe.findall('nfe:det', ns):
+
+                prod = det.find('nfe:prod', ns)
+                if prod is None:
+                    continue
+
+                compra = det.find('nfe:compra', ns)
+
+                produtos.append({
+                    "codigo": prod.findtext('nfe:cProd', None, ns),
+                    "descricao": prod.findtext('nfe:xProd', None, ns),
+                    "ncm": prod.findtext('nfe:NCM', None, ns),
+                    "cfop": prod.findtext('nfe:CFOP', None, ns),
+                    "quantidade": prod.findtext('nfe:qCom', None, ns),
+                    "valor_unitario": prod.findtext('nfe:vUnCom', None, ns),
+                    "valor_total": prod.findtext('nfe:vProd', None, ns),
+                    "pedido_prod": prod.findtext('nfe:xPed', None, ns),
+                    "pedido_compra": compra.findtext('nfe:xPed', None, ns) if compra is not None else None,
+                    "info_adicional_produto": det.findtext('nfe:infAdProd', None, ns),
+                })
+
+            # ==========================
+            # PROTOCOLO (quando existir)
+            # ==========================
+            protocolo = root.find('.//nfe:protNFe/nfe:infProt/nfe:nProt', ns)
+            protocolo = protocolo.text if protocolo is not None else None
+
+            return {
+                "chave": chave,
+                "numero": numero,
+                "serie": serie,
+                "data_emissao": data_emissao,
+                "natOp": nat_op,
+                "tpNF": tp_nf,
+                "cUF": cuf,
+                "emitente": emitente,
+                "destinatario": destinatario,
+                "totais": totais,
+                "transportadora": transportadora,
+                "faturas": faturas,
+                "informacoes_adicionais": informacoes_adicionais,
+                "responsavel_tecnico": responsavel_tecnico,
+                "produtos": produtos,
+                "protocolo": protocolo
+            }
+
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -334,21 +550,6 @@ class ConferenciaXmlNf:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def verifica_se_e_nfe(self, xml_bytes):
-        try:
-            root = ET.fromstring(xml_bytes)
-
-            if root.find('.//{http://www.portalfiscal.inf.br/nfe}infNFe') is not None:
-                return True
-
-            return False
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-            return False
-
     def remove_espacos_e_especiais(self, string):
         try:
             if not string:
@@ -360,7 +561,7 @@ class ConferenciaXmlNf:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def conferir_dados_gerais(self, dados_nf, erros):
+    def conferir_fornecedor_cliente(self, dados_nf, erros):
         try:
             dados_fornecedor = []
 
@@ -556,157 +757,6 @@ class ConferenciaXmlNf:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def ler_nfe_xml(self, xml_bytes: bytes) -> dict[str, Any] | None:
-        try:
-            ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
-
-            root = ET.fromstring(xml_bytes)
-
-            infnfe = root.find('.//nfe:infNFe', ns)
-            if infnfe is None:
-                return None
-
-            # ==========================
-            # IDE
-            # ==========================
-            numero = infnfe.findtext('nfe:ide/nfe:nNF', default=None, namespaces=ns)
-            serie = infnfe.findtext('nfe:ide/nfe:serie', default=None, namespaces=ns)
-            data_emissao = infnfe.findtext('nfe:ide/nfe:dhEmi', default=None, namespaces=ns)
-
-            # ==========================
-            # EMITENTE
-            # ==========================
-            emit = infnfe.find('nfe:emit', ns)
-
-            emitente = {
-                "cnpj": emit.findtext('nfe:CNPJ', default=None, namespaces=ns) if emit is not None else None,
-                "nome": emit.findtext('nfe:xNome', default=None, namespaces=ns) if emit is not None else None
-            }
-
-            # ==========================
-            # DESTINATÁRIO
-            # ==========================
-            dest = infnfe.find('nfe:dest', ns)
-
-            destinatario = {
-                "cnpj": dest.findtext('nfe:CNPJ', default=None, namespaces=ns) if dest is not None else None,
-                "nome": dest.findtext('nfe:xNome', default=None, namespaces=ns) if dest is not None else None
-            }
-
-            # ==========================
-            # TOTAIS
-            # ==========================
-            total = infnfe.find('nfe:total/nfe:ICMSTot', ns)
-
-            valor_produtos = None
-            valor_nf = None
-            valor_icms = None
-            frete_total = None
-            desconto_total = None
-
-            if total is not None:
-                valor_produtos = total.findtext('nfe:vProd', default=None, namespaces=ns)
-                valor_nf = total.findtext('nfe:vNF', default=None, namespaces=ns)
-                valor_icms = total.findtext('nfe:vICMS', default=None, namespaces=ns)
-                frete_total = total.findtext('nfe:vFrete', default=None, namespaces=ns)
-                desconto_total = total.findtext('nfe:vDesc', default=None, namespaces=ns)
-
-            totais = {
-                "valor_produtos": valor_produtos,
-                "valor_nf": valor_nf,
-                "valor_icms": valor_icms,
-                "frete_total": frete_total,
-                "desconto_total": desconto_total
-            }
-
-            # ==========================
-            # PESOS
-            # ==========================
-            peso_bruto = 0.0
-            peso_liquido = 0.0
-
-            for vol in infnfe.findall('nfe:transp/nfe:vol', ns):
-                pL = vol.findtext('nfe:pesoL', default='0', namespaces=ns)
-                pB = vol.findtext('nfe:pesoB', default='0', namespaces=ns)
-
-                try:
-                    peso_liquido += float(pL)
-                except:
-                    pass
-
-                try:
-                    peso_bruto += float(pB)
-                except:
-                    pass
-
-            # ==========================
-            # FATURAS / DUPLICATAS
-            # ==========================
-            faturas = []
-
-            for dup in infnfe.findall('nfe:cobr/nfe:dup', ns):
-                numero_dup = dup.findtext('nfe:nDup', default=None, namespaces=ns)
-                data_venc = dup.findtext('nfe:dVenc', default=None, namespaces=ns)
-                valor_dup = dup.findtext('nfe:vDup', default=None, namespaces=ns)
-
-                faturas.append({
-                    "numero": numero_dup,
-                    "vencimento": data_venc,
-                    "valor": valor_dup
-                })
-
-            # ==========================
-            # PRODUTOS
-            # ==========================
-            produtos = []
-
-            for det in infnfe.findall('nfe:det', ns):
-
-                prod = det.find('nfe:prod', ns)
-                if prod is None:
-                    continue
-
-                imposto = det.find('nfe:imposto', ns)
-
-                ipi_valor = None
-
-                if imposto is not None:
-                    ipi = imposto.find('nfe:IPI', ns)
-                    if ipi is not None:
-                        ipi_trib = ipi.find('nfe:IPITrib', ns)
-                        if ipi_trib is not None:
-                            ipi_valor = ipi_trib.findtext('nfe:vIPI', default=None, namespaces=ns)
-
-                produtos.append({
-                    "codigo": prod.findtext('nfe:cProd', default=None, namespaces=ns),
-                    "descricao": prod.findtext('nfe:xProd', default=None, namespaces=ns),
-                    "ncm": prod.findtext('nfe:NCM', default=None, namespaces=ns),
-                    "cfop": prod.findtext('nfe:CFOP', default=None, namespaces=ns),
-                    "quantidade": prod.findtext('nfe:qCom', default=None, namespaces=ns),
-                    "valor_unitario": prod.findtext('nfe:vUnCom', default=None, namespaces=ns),
-                    "valor_total": prod.findtext('nfe:vProd', default=None, namespaces=ns),
-                    "ipi": ipi_valor
-                })
-
-            return {
-                "numero": numero,
-                "serie": serie,
-                "data_emissao": data_emissao,
-                "emitente": emitente,
-                "destinatario": destinatario,
-                "totais": totais,
-                "peso_bruto": peso_bruto,
-                "peso_liquido": peso_liquido,
-                "faturas": faturas,
-                "produtos": produtos
-            }
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-            return None
 
     def verifica_pre_ja_lancado(self, dados_pre_nota):
         try:
