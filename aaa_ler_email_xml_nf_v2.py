@@ -25,9 +25,6 @@ class ConferenciaXmlNf:
     def __init__(self):
         nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
         self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
-        self.diretorio_script = os.path.dirname(nome_arquivo_com_caminho)
-        nome_base = os.path.splitext(self.nome_arquivo)[0]
-        self.arquivo_log = os.path.join(self.diretorio_script, f"{nome_base}_erros.txt")
 
         self.caminho_poppler = r'C:\Program Files\poppler-24.08.0\Library\bin'
 
@@ -50,10 +47,6 @@ class ConferenciaXmlNf:
 
             grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
 
-            # 'Log' em arquivo local apenas se houver erro
-            with open(self.arquivo_log, "a", encoding="utf-8") as f:
-                f.write(f"Erro na função {nome_funcao} do arquivo {arquivo}: {mensagem} (linha {num_linha_erro})\n")
-
         except Exception as e:
             nome_funcao_trat = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
@@ -62,10 +55,6 @@ class ConferenciaXmlNf:
             print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
                   f'{e} {num_linha_erro}')
             grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
-
-            with open(self.arquivo_log, "a", encoding="utf-8") as f:
-                f.write(
-                    f"Erro na função {nome_funcao_trat} do arquivo {self.nome_arquivo}: {e} (linha {num_linha_erro})\n")
 
     def manipula_comeco(self):
         try:
@@ -76,7 +65,7 @@ class ConferenciaXmlNf:
             if not lista_xmls:
                 print("Nenhum XML encontrado nos e-mails.")
             else:
-                self.processar_xmls(lista_xmls)
+                self.processar_xmls(imap, lista_xmls)
 
             imap.expunge()
             imap.logout()
@@ -164,6 +153,7 @@ class ConferenciaXmlNf:
                         # Se encontrou XML nesse email
                         if xml_encontrado:
                             lista_emails_processar.append({
+                                "num": num,
                                 "xml": xml_encontrado,
                                 "anexos": anexos_email
                             })
@@ -189,10 +179,12 @@ class ConferenciaXmlNf:
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
             return None
 
-    def processar_xmls(self, lista_xmls):
+    def processar_xmls(self, imap, lista_xmls):
         try:
             for email_data in lista_xmls:
+                ja_foi_lancado = False
 
+                num = email_data["num"]
                 xml_nome = email_data["xml"]["nome"]
                 xml_bytes = email_data["xml"]["conteudo"]
                 anexos_email = email_data["anexos"]
@@ -206,26 +198,54 @@ class ConferenciaXmlNf:
                 erros = []
 
                 dados_nf = self.ler_nfe_xml(xml_bytes)
-                print(dados_nf)
 
                 if not dados_nf:
                     print("Erro ao ler NF.")
                     continue
 
-                dados_for_cliente, erros = self.conferir_fornecedor_cliente(dados_nf, erros)
+                cnpj_destinatario = dados_nf['destinatario']['cnpj']
+                chave_existe = self.conferir_chave_nf(dados_nf)
+                fornecedor_existe = self.conferir_fornecedor(dados_nf)
+                transportador = dados_nf["transportadora"]
 
-                if not dados_for_cliente:
-                    msg = "Fornecedor inválido."
-                    print(msg)
-                    self.envia_email_erros_nf(erros, msg, anexos_email)
-                    continue
+                if not cnpj_destinatario == self.cnpj_maquinas:
+                    erros.append(f"CNPJ DO DESTINATÁRIO NÃO É DESTINADO A SUZUKI MÁQUINAS: {cnpj_destinatario}")
+                elif chave_existe:
+                    num_nf = dados_nf["numero"]
+                    nome_fornecedor = dados_nf['emitente']['fantasia']
+                    erros.append(f"NF JÁ FOI LANÇADA NO SISTEMA: Nº NF: {num_nf} - {nome_fornecedor}")
+
+                    ja_foi_lancado = True
+
+                elif not fornecedor_existe:
+                    nome_fornecedor = dados_nf['emitente']['fantasia']
+                    cnpj_fornecedor = dados_nf['emitente']['cnpj']
+                    erros.append(f"O CNPJ DO FORNECEDOR NÃO ESTÁ CADASTRADO: {nome_fornecedor} - {cnpj_fornecedor}")
+                elif transportador:
+                    cnpj_transportador = dados_nf['transportadora']['cnpj']
+
+                    if cnpj_transportador:
+                        transportador_existe = self.conferir_transportador(dados_nf)
+
+                        if not transportador_existe:
+                            nome_transportador = dados_nf['transportadora']['nome']
+                            erros.append(f"O CNPJ DO TRANSPORTADOR NÃO ESTÁ CADASTRADO EM "
+                                         f"FORNECEDORES: {nome_transportador} - {cnpj_transportador}")
 
                 if erros:
                     msg = "⚠ NF COM DIVERGÊNCIAS"
-                    print(msg)
                     self.envia_email_erros_nf(erros, msg, anexos_email)
+
+                    if ja_foi_lancado:
+                        imap.store(num, '+FLAGS', '\\Deleted')
                 else:
                     print("✅ NF VALIDADA COM SUCESSO!")
+
+                    produtos = self.cadastrar_produtos(fornecedor_existe, dados_nf)
+
+                    self.salvar_pre_nota(dados_nf, produtos, fornecedor_existe)
+
+                    imap.store(num, '+FLAGS', '\\Deleted')
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -294,17 +314,32 @@ class ConferenciaXmlNf:
             }
 
             # ==========================
-            # TOTAIS
+            # TOTAIS (TRADUZIDO)
             # ==========================
             total = infnfe.find('nfe:total/nfe:ICMSTot', ns)
 
-            totais = {}
+            totais = {
+                "valor_produtos": None,
+                "valor_nf": None,
+                "valor_icms": None,
+                "valor_icms_st": None,
+                "valor_ipi": None,
+                "valor_frete": None,
+                "valor_seguro": None,
+                "valor_desconto": None,
+                "valor_outros": None
+            }
+
             if total is not None:
-                for tag in [
-                    "vProd", "vNF", "vICMS", "vICMSST", "vIPI",
-                    "vFrete", "vSeg", "vDesc", "vOutro"
-                ]:
-                    totais[tag] = total.findtext(f'nfe:{tag}', None, ns)
+                totais["valor_produtos"] = total.findtext('nfe:vProd', None, ns)
+                totais["valor_nf"] = total.findtext('nfe:vNF', None, ns)
+                totais["valor_icms"] = total.findtext('nfe:vICMS', None, ns)
+                totais["valor_icms_st"] = total.findtext('nfe:vICMSST', None, ns)
+                totais["valor_ipi"] = total.findtext('nfe:vIPI', None, ns)
+                totais["valor_frete"] = total.findtext('nfe:vFrete', None, ns)
+                totais["valor_seguro"] = total.findtext('nfe:vSeg', None, ns)
+                totais["valor_desconto"] = total.findtext('nfe:vDesc', None, ns)
+                totais["valor_outros"] = total.findtext('nfe:vOutro', None, ns)
 
             # ==========================
             # TRANSPORTE
@@ -335,7 +370,7 @@ class ConferenciaXmlNf:
 
                     try:
                         transportadora["qVol"] += int(qvol)
-                    except (ValueError, TypeError):
+                    except:
                         pass
 
                     if esp:
@@ -343,12 +378,12 @@ class ConferenciaXmlNf:
 
                     try:
                         transportadora["peso_liquido"] += float(pl)
-                    except (ValueError, TypeError):
+                    except:
                         pass
 
                     try:
                         transportadora["peso_bruto"] += float(pb)
-                    except (ValueError, TypeError):
+                    except:
                         pass
 
             # ==========================
@@ -363,61 +398,50 @@ class ConferenciaXmlNf:
                 })
 
             # ==========================
-            # INFORMAÇÕES ADICIONAIS
-            # ==========================
-            inf_adic = infnfe.find('nfe:infAdic', ns)
-
-            informacoes_adicionais = {
-                "infAdFisco": None,
-                "infCpl": None
-            }
-
-            if inf_adic is not None:
-                informacoes_adicionais["infAdFisco"] = inf_adic.findtext('nfe:infAdFisco', None, ns)
-                informacoes_adicionais["infCpl"] = inf_adic.findtext('nfe:infCpl', None, ns)
-
-            # ==========================
-            # RESPONSÁVEL TÉCNICO
-            # ==========================
-            resp_tec = infnfe.find('nfe:infRespTec', ns)
-
-            responsavel_tecnico = None
-            if resp_tec is not None:
-                responsavel_tecnico = {
-                    "cnpj": resp_tec.findtext('nfe:CNPJ', None, ns),
-                    "contato": resp_tec.findtext('nfe:xContato', None, ns),
-                    "email": resp_tec.findtext('nfe:email', None, ns),
-                    "fone": resp_tec.findtext('nfe:fone', None, ns),
-                }
-
-            # ==========================
             # PRODUTOS
             # ==========================
             produtos = []
 
             for det in infnfe.findall('nfe:det', ns):
-
                 prod = det.find('nfe:prod', ns)
                 if prod is None:
                     continue
 
-                compra = det.find('nfe:compra', ns)
+                inf_ad_prod = det.findtext('nfe:infAdProd', None, ns)
+
+                ipi = det.find('nfe:imposto/nfe:IPI', ns)
+
+                p_ipi = None
+
+                if ipi is not None:
+                    p_ipi = ipi.findtext('.//nfe:pIPI', None, ns)
+
+                pedido = prod.findtext('nfe:VPed', None, ns)
+                item_pedido = prod.findtext('nfe:vItemPed', None, ns)
+
+                info_completa = " | ".join(
+                    filtro for filtro in [
+                        f"Pedido: {pedido}" if pedido else None,
+                        f"Item: {item_pedido}" if item_pedido else None,
+                        inf_ad_prod
+                    ] if filtro
+                )
 
                 produtos.append({
                     "codigo": prod.findtext('nfe:cProd', None, ns),
                     "descricao": prod.findtext('nfe:xProd', None, ns),
+                    "um": prod.findtext('nfe:uCom', None, ns),
                     "ncm": prod.findtext('nfe:NCM', None, ns),
                     "cfop": prod.findtext('nfe:CFOP', None, ns),
                     "quantidade": prod.findtext('nfe:qCom', None, ns),
                     "valor_unitario": prod.findtext('nfe:vUnCom', None, ns),
                     "valor_total": prod.findtext('nfe:vProd', None, ns),
-                    "pedido_prod": prod.findtext('nfe:xPed', None, ns),
-                    "pedido_compra": compra.findtext('nfe:xPed', None, ns) if compra is not None else None,
-                    "info_adicional_produto": det.findtext('nfe:infAdProd', None, ns),
+                    "ipi_prod": p_ipi,
+                    "informacoes_adicionais": info_completa
                 })
 
             # ==========================
-            # PROTOCOLO (quando existir)
+            # PROTOCOLO
             # ==========================
             protocolo = root.find('.//nfe:protNFe/nfe:infProt/nfe:nProt', ns)
             protocolo = protocolo.text if protocolo is not None else None
@@ -435,12 +459,9 @@ class ConferenciaXmlNf:
                 "totais": totais,
                 "transportadora": transportadora,
                 "faturas": faturas,
-                "informacoes_adicionais": informacoes_adicionais,
-                "responsavel_tecnico": responsavel_tecnico,
                 "produtos": produtos,
                 "protocolo": protocolo
             }
-
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -561,250 +582,197 @@ class ConferenciaXmlNf:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def conferir_fornecedor_cliente(self, dados_nf, erros):
+    def conferir_chave_nf(self, dados_nf):
         try:
-            dados_fornecedor = []
-
-            cnpj = dados_nf['emitente']['cnpj']
-
-            cnpj_destinatario = dados_nf['destinatario']['cnpj']
-
-            if cnpj_destinatario == self.cnpj_maquinas:
-                cursor = conecta.cursor()
-                cursor.execute(f"SELECT id, data_criacao, registro, razao, cnpj "
-                               f"FROM fornecedores "
-                               f"WHERE cnpj = '{cnpj}';")
-                dados_fornecedor = cursor.fetchall()
-            else:
-                erros.append(f"CNPJ DO DESTINATÁRIO NÃO É DESTINADO A SUZUKI MÁQUINAS: {cnpj_destinatario}")
-
-            return dados_fornecedor, erros
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def conferir_dados_produtos(self, dados_fornecedor, dados_nf, erros):
-        try:
-            id_fornecedor = dados_fornecedor[0][0]
-            cnpj = dados_fornecedor[0][4]
-
-            dados_pre_nota = {
-                "fornecedor_id": id_fornecedor,
-                "numero_nf": dados_nf["numero"],
-                "serie": dados_nf["serie"],
-                "data_emissao": dados_nf["data_emissao"],
-                "valor_produtos": valores_para_float(dados_nf["totais"]["valor_produtos"]),
-                "valor_nf": valores_para_float(dados_nf["totais"]["valor_nf"]),
-                "valor_icms": valores_para_float(dados_nf["totais"]["valor_icms"]),
-                "valor_frete": valores_para_float(dados_nf["totais"]["frete_total"]),
-                "valor_desconto": valores_para_float(dados_nf["totais"]["desconto_total"]),
-                "peso_bruto": valores_para_float(dados_nf["peso_bruto"]),
-                "peso_liquido": valores_para_float(dados_nf["peso_liquido"]),
-                "faturas": dados_nf["faturas"],
-                "itens": []
-            }
-
-            ocs_encontradas = {}
-
-            for prod_nf in dados_nf['produtos']:
-
-                cod_prod_f = prod_nf['codigo']
-
-                vinculo = self.conferir_vinculo_produtos(id_fornecedor, cod_prod_f)
-
-                if not vinculo:
-                    erros.append(f"Produto não vinculado: {cod_prod_f}")
-                    continue
-
-                id_produto = vinculo[0][0]
-                cod_siger = vinculo[0][1]
-
-                dados_oc = self.consulta_oc_pendente(cnpj, cod_siger)
-
-                if not dados_oc:
-                    erros.append(f"O produto {cod_siger} não foi encontrado nas OCs pendentes!")
-                    continue
-
-                (id_oc, id_prod_oc, emissao_oc, num_oc, nome_forn, frete, descont, obs_oc,
-                 cod, descr, ref, um, ncm, qtde, unit, ipi, dt_entrega) = dados_oc[0]
-
-                # =============================
-                # GUARDA OC AGRUPADA
-                # =============================
-
-                if id_oc not in ocs_encontradas:
-                    ocs_encontradas[id_oc] = {
-                        "emissao": emissao_oc,
-                        "fornecedor": nome_forn,
-                        "frete": valores_para_float(frete),
-                        "desconto": valores_para_float(descont),
-                        "obs": obs_oc,
-                    }
-
-                # =============================
-                # VALIDA ITEM
-                # =============================
-
-                ncm_nf = self.remove_espacos_e_especiais(prod_nf['ncm'])
-                qtde_nf = valores_para_float(prod_nf['quantidade'])
-                unit_nf = valores_para_float(prod_nf['valor_unitario'])
-                ipi_nf = valores_para_float(prod_nf['ipi'])
-
-                cfop_nf = self.remove_espacos_e_especiais(prod_nf['cfop'])
-
-                ncm_oc = self.remove_espacos_e_especiais(ncm)
-                qtde_oc = valores_para_float(qtde)
-                unit_oc = valores_para_float(unit)
-                ipi_oc = valores_para_float(ipi)
-
-                if ncm_nf != ncm_oc:
-                    erros.append(f"NCM diferente no produto {cod_siger}")
-
-                if round(qtde_nf, 4) != round(qtde_oc, 4):
-                    erros.append(f"Quantidade diferente no produto {cod_siger}")
-
-                if round(unit_nf, 4) != round(unit_oc, 4):
-                    erros.append(f"Valor unitário diferente no produto {cod_siger}")
-
-                if round(ipi_nf, 4) != round(ipi_oc, 4):
-                    erros.append(f"IPI diferente no produto {cod_siger}")
-
-                # =============================
-                # MONTA ITEM INTERNO
-                # =============================
-
-                item_interno = {
-                    "id_prod_oc": id_prod_oc,
-                    "ncm_nf": ncm_nf,
-                    "cfop_nf": cfop_nf,
-                    "id_produto": id_produto,
-                    "descricao": descr,
-                    "quantidade_nf": qtde_nf,
-                    "quantidade_oc": qtde_oc,
-                    "valor_unitario_nf": unit_nf,
-                    "valor_unitario_oc": unit_oc,
-                    "valor_total_nf": qtde_nf * unit_nf,
-                    "ipi_nf": ipi_nf
-                }
-
-                dados_pre_nota["itens"].append(item_interno)
-
-            # =============================
-            # VALIDA TOTAIS (FRETE / DESCONTO)
-            # =============================
-
-            frete_total_oc = sum(oc["frete"] for oc in ocs_encontradas.values())
-            desconto_total_oc = sum(oc["desconto"] for oc in ocs_encontradas.values())
-
-            frete_nf = dados_pre_nota["valor_frete"]
-            desconto_nf = dados_pre_nota["valor_desconto"]
-
-            if round(frete_nf, 2) != round(frete_total_oc, 2):
-                erros.append("Frete da NF diferente do total das OCs")
-
-            if round(desconto_nf, 2) != round(desconto_total_oc, 2):
-                erros.append("Desconto da NF diferente do total das OCs")
-
-            return dados_pre_nota, erros
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def conferir_vinculo_produtos(self, id_fornecedor, cod_prod_f):
-        try:
-            cursor = conecta.cursor()
-            cursor.execute(f"SELECT prod_f.ID_PRODUTO, prod.codigo "
-                           f"FROM PRODUTO_FORNECEDOR as prod_f "
-                           f"INNER JOIN produto prod ON prod_f.ID_PRODUTO = prod.id "
-                           f"WHERE prod_f.ID_FORNECEDOR = {id_fornecedor} "
-                           f"AND prod_f.COD_PRODUTO_F = {cod_prod_f};")
-
-            vinculo = cursor.fetchall()
-
-            return vinculo
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def consulta_oc_pendente(self, cnpj, cod_prod):
-        try:
-            cursor = conecta.cursor()
-            cursor.execute(
-                f"SELECT oc.id, prodoc.id, oc.data, oc.numero, forn.razao, oc.frete, oc.descontos, oc.obs, "
-                f"prodoc.codigo, prod.descricao, COALESCE(prod.obs, ''), "
-                f"prod.unidade, prod.ncm, prodoc.quantidade, prodoc.unitario, prodoc.ipi, "
-                f"prodoc.dataentrega "
-                f"FROM ordemcompra as oc "
-                f"INNER JOIN produtoordemcompra as prodoc ON oc.id = prodoc.mestre "
-                f"INNER JOIN produto as prod ON prodoc.produto = prod.id "
-                f"INNER JOIN fornecedores as forn ON oc.fornecedor = forn.id "
-                f"where prodoc.codigo = '{cod_prod}' "
-                f"and forn.cnpj = '{cnpj}' "
-                f"and oc.entradasaida = 'E' "
-                f"AND oc.STATUS = 'A' "
-                f"AND prodoc.produzido < prodoc.quantidade;")
-            dados_oc = cursor.fetchall()
-
-            return dados_oc
-
-        except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
-
-    def verifica_pre_ja_lancado(self, dados_pre_nota):
-        try:
-            id_fornecedor = dados_pre_nota["fornecedor_id"]
-            num_nf = dados_pre_nota["numero_nf"]
+            chave_nf = dados_nf["chave"]
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT * "
                            f"FROM PRE_NF_COMPRA "
-                           f"WHERE ID_FORNECEDOR = {id_fornecedor} "
-                           f"and NUMERO_NF = {num_nf};")
-            dados_nf = cursor.fetchall()
+                           f"WHERE CHAVE_NFE = '{chave_nf}';")
+            dados_chave = cursor.fetchall()
 
-            return dados_nf
+            return dados_chave
 
         except Exception as e:
-            conecta.rollback()
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def salvar_pre_nota(self, dados_pre_nota):
+    def conferir_fornecedor(self, dados_nf):
         try:
-            # ==========================
-            # INSERE CABEÇALHO
-            # ==========================
-            data_emissao_str = dados_pre_nota["data_emissao"]
+            cnpj_fornecedor = dados_nf['emitente']['cnpj']
+
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT id, data_criacao, registro, razao, cnpj "
+                           f"FROM fornecedores "
+                           f"WHERE cnpj = '{cnpj_fornecedor}';")
+            dados_fornecedor = cursor.fetchall()
+
+
+            return dados_fornecedor
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def conferir_transportador(self, dados_nf):
+        try:
+            cnpj_transportador = dados_nf['transportadora']['cnpj']
+
+            cursor = conecta.cursor()
+            cursor.execute(f"SELECT id, data_criacao, registro, razao, cnpj "
+                           f"FROM fornecedores "
+                           f"WHERE cnpj = '{cnpj_transportador}';")
+            dados_transportador = cursor.fetchall()
+
+            return dados_transportador
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def cadastrar_produtos(self, dados_fornecedor, dados_nf):
+        try:
+            produtos = []
+
+            id_fornecedor = dados_fornecedor[0][0]
+
+            for prod_nf in dados_nf['produtos']:
+                cod_prod = prod_nf['codigo']
+                descricao = prod_nf['descricao']
+                um = prod_nf['um']
+                ncm = self.remove_espacos_e_especiais(prod_nf['ncm'])
+                cfop = self.remove_espacos_e_especiais(prod_nf['cfop'])
+                qtde = valores_para_float(prod_nf['quantidade'])
+                unit = valores_para_float(prod_nf['valor_unitario'])
+                ipi = valores_para_float(prod_nf['ipi_prod'])
+                inf_produto = prod_nf['informacoes_adicionais']
+
+                cursor = conecta.cursor()
+                sql = """
+                SELECT ID, CODIGO_FORNECEDOR
+                FROM PRE_PRODUTO_FORNECEDOR
+                WHERE CODIGO_FORNECEDOR = ?
+                AND ID_FORNECEDOR = ?
+                """
+
+                cursor.execute(sql, (cod_prod, id_fornecedor))
+                dados_produto = cursor.fetchall()
+
+                if not dados_produto:
+                    print("PRECISA CADASTRAR:", cod_prod, descricao, um, ncm)
+
+                    inf_produto = (
+                        cod_prod,
+                        descricao,
+                        um,
+                        id_fornecedor,
+                        ncm
+                    )
+
+                    sql_pre_prod = """
+                    INSERT INTO PRE_PRODUTO_FORNECEDOR (
+                    ID, CODIGO_FORNECEDOR, DESCRICAO, UM, ID_FORNECEDOR, NCM)
+                    VALUES (GEN_ID(GEN_PRE_PRODUTO_FORNECEDOR_ID, 1), ?, ?, ?, ?, ?) 
+                    RETURNING ID
+                    """
+                    cursor.execute(sql_pre_prod, inf_produto)
+                    id_produto = cursor.fetchone()[0]
+
+                    produtos.append({
+                        "id": id_produto,
+                        "cfop": cfop,
+                        "qtde": qtde,
+                        "unit": unit,
+                        "ipi": ipi,
+                        "obs": inf_produto
+                    })
+                else:
+                    id_produto = dados_produto[0][0]
+
+                    produtos.append({
+                        "id": id_produto,
+                        "cfop": cfop,
+                        "qtde": qtde,
+                        "unit": unit,
+                        "ipi": ipi,
+                        "obs": inf_produto
+                    })
+
+            conecta.commit()
+
+            return produtos
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def salvar_pre_nota(self, dados_nf, produtos, dados_fornecedor):
+        try:
+            id_fornecedor = dados_fornecedor[0][0]
+
+            data_emissao_str = dados_nf["data_emissao"]
             data_emissao = datetime.fromisoformat(data_emissao_str).date()
 
+            id_transportadora = None
+
+            transportador = dados_nf["transportadora"]
+            if transportador:
+                cnpj_transportador = dados_nf['transportadora']['cnpj']
+
+                if cnpj_transportador:
+                    cursor = conecta.cursor()
+                    cursor.execute(f"SELECT id, data_criacao, registro, razao, cnpj "
+                                   f"FROM fornecedores "
+                                   f"WHERE cnpj = '{cnpj_transportador}';")
+                    dados_transportador = cursor.fetchall()
+
+                    id_transportadora = dados_transportador[0][0]
+
+            volume = int(dados_nf['transportadora']['qVol'])
+
+            esp_volume = dados_nf['transportadora']['esp']
+
+            if isinstance(esp_volume, list):
+                esp_volume = esp_volume[0]
+
+            peso_bruto = valores_para_float(dados_nf['transportadora']['peso_bruto'])
+            peso_liq = valores_para_float(dados_nf['transportadora']['peso_liquido'])
+
             valores_pre = (
-                dados_pre_nota["fornecedor_id"],
-                dados_pre_nota["numero_nf"],
+                dados_nf["chave"],
+                dados_nf["numero"],
+                dados_nf["serie"],
                 data_emissao,
-                dados_pre_nota["valor_produtos"],
-                dados_pre_nota["valor_nf"],
-                dados_pre_nota["valor_frete"],
-                dados_pre_nota["valor_desconto"],
-                dados_pre_nota["peso_bruto"],
-                dados_pre_nota["peso_liquido"],
+                dados_nf["natOp"],
+                dados_nf["tpNF"],
+                id_fornecedor,
+                valores_para_float(dados_nf['totais']['valor_produtos']),
+                valores_para_float(dados_nf['totais']['valor_nf']),
+                valores_para_float(dados_nf['totais']['valor_ipi']),
+                valores_para_float(dados_nf['totais']['valor_frete']),
+                valores_para_float(dados_nf['totais']['valor_desconto']),
+                valores_para_float(dados_nf['totais']['valor_outros']),
+                id_transportadora,
+                volume,
+                esp_volume,
+                peso_bruto,
+                peso_liq
             )
-            print("valores_pre", valores_pre)
 
             sql_pre = """
-                INSERT INTO PRE_NF_COMPRA (
-                ID, ID_FORNECEDOR, NUMERO_NF, DATA_EMISSAO, VALOR_PRODUTOS, VALOR_TOTAL, 
-                FRETE, DESCONTOS, PESO_BRUTO, PESO_LIQUIDO
-                )
-                VALUES (GEN_ID(GEN_PRE_NF_COMPRA_ID, 1), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO PRE_NF_COMPRA (ID, 
+                CHAVE_NFE, NUMERO_NF, SERIE, DATA_EMISSAO, NAT_OP, TP_NF, ID_FORNECEDOR, 
+                VALOR_PRODUTOS, VALOR_TOTAL, VALOR_IPI, VALOR_FRETE, VALOR_DESCONTO, VALOR_OUTRO, 
+                ID_TRANSPORTADOR, VOLUME, ESP_VOLUME, PESO_BRUTO, PESO_LIQUIDO)
+                VALUES (GEN_ID(GEN_PRE_NF_COMPRA_ID, 1), 
+                ?, ?, ?, ?, ?, ?, ?, 
+                ?, ?, ?, ?, ?, ?, 
+                ?, ?, ?, ?, ?)
                 RETURNING ID
                 """
 
@@ -812,29 +780,31 @@ class ConferenciaXmlNf:
             cursor.execute(sql_pre, valores_pre)
             id_pre_nota = cursor.fetchone()[0]
 
-            for indice, item in enumerate(dados_pre_nota["itens"], start=1):
+            if not produtos:
+                raise Exception("Lista de produtos está vazia ou None")
+
+            for indice, item in enumerate(produtos, start=1):
                 valores_item = (
                     id_pre_nota,
                     indice,
-                    item["id_produto"],
-                    item["id_prod_oc"],
-                    item["ncm_nf"],
-                    item["cfop_nf"],
-                    item["quantidade_nf"],
-                    item["valor_unitario_nf"],
-                    item["ipi_nf"],
+                    item["id"],
+                    item["cfop"],
+                    item["qtde"],
+                    item["unit"],
+                    item["ipi"],
+                    item["obs"],
                 )
-                print("valores_item", valores_item)
 
                 sql_pre_prod = """
-                    INSERT INTO PRE_NF_COMPRA_PRODUTOS (
-                    ID, ID_NF_PRE, ITEM, ID_PRODUTO, ID_PROD_OC, NCM, CFOP, QTDE, UNIT, IPI
+                    INSERT INTO PRE_NF_COMPRA_PRODUTOS (ID, 
+                    ID_NF_PRE, ITEM, ID_PRODUTO_FORN, CFOP, QTDE, UNIT, IPI, OBS
                     )
-                    VALUES (GEN_ID(GEN_PRE_NF_COMPRA_PRODUTOS_ID, 1), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (GEN_ID(GEN_PRE_NF_COMPRA_PRODUTOS_ID, 1), 
+                    ?, ?, ?, ?, ?, ?, ?, ?)
                     """
                 cursor.execute(sql_pre_prod, valores_item)
 
-            faturas = dados_pre_nota["faturas"]
+            faturas = dados_nf["faturas"]
             if faturas:
                 for fatura in faturas:
                     data_venc_str = fatura["vencimento"]
@@ -845,8 +815,6 @@ class ConferenciaXmlNf:
                         data_venc,
                         fatura["valor"],
                     )
-
-                    print("valores_fatura", valores_fatura)
 
                     sql_pre_prod = """
                                         INSERT INTO PRE_NF_COMPRA_FATURAS (
