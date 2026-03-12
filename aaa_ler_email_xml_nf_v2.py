@@ -19,6 +19,7 @@ from email.header import decode_header
 from email.utils import parseaddr
 import smtplib
 import imaplib
+from decimal import Decimal
 
 
 class ConferenciaXmlNf:
@@ -241,8 +242,10 @@ class ConferenciaXmlNf:
                 else:
                     print("✅ NF VALIDADA COM SUCESSO!")
 
-                    produtos = self.cadastrar_produtos(fornecedor_existe, dados_nf)
+                    # 🔥 SALVA XML E PDF NO SERVIDOR
+                    self.salvar_anexos_servidor(dados_nf, xml_bytes, anexos_email)
 
+                    produtos = self.cadastrar_produtos(fornecedor_existe, dados_nf)
                     self.salvar_pre_nota(dados_nf, produtos, fornecedor_existe)
 
                     imap.store(num, '+FLAGS', '\\Deleted')
@@ -588,7 +591,7 @@ class ConferenciaXmlNf:
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT * "
-                           f"FROM PRE_NF_COMPRA "
+                           f"FROM PRE_NF_ENTRADA "
                            f"WHERE CHAVE_NFE = '{chave_nf}';")
             dados_chave = cursor.fetchall()
 
@@ -634,6 +637,58 @@ class ConferenciaXmlNf:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def salvar_anexos_servidor(self, dados_nf, xml_bytes, anexos_email):
+        try:
+            # 📅 Data de emissão
+            data_emissao_str = dados_nf["data_emissao"]
+            data_emissao = datetime.fromisoformat(data_emissao_str)
+
+            ano = data_emissao.strftime("%Y")
+            mes = data_emissao.strftime("%m")
+            dia = data_emissao.strftime("%d")
+
+            numero_nf = dados_nf["numero"]
+
+            # 📂 Caminho base
+            base_path = r"\\Publico\g\Pasta Scanner Backup\xml"
+
+            # 📁 Monta estrutura: ano/mês/dia
+            pasta_destino = os.path.join(base_path, ano, mes, dia)
+
+            # Cria pastas se não existirem
+            os.makedirs(pasta_destino, exist_ok=True)
+
+            # ==========================
+            # 💾 Salvar XML
+            # ==========================
+            caminho_xml = os.path.join(pasta_destino, f"{numero_nf}.xml")
+
+            with open(caminho_xml, "wb") as f:
+                f.write(xml_bytes)
+
+            print(f"XML salvo em: {caminho_xml}")
+
+            # ==========================
+            # 💾 Salvar PDF se existir
+            # ==========================
+            for anexo in anexos_email:
+                if anexo["nome"].lower().endswith(".pdf"):
+                    caminho_pdf = os.path.join(pasta_destino, f"{numero_nf}.pdf")
+
+                    with open(caminho_pdf, "wb") as f:
+                        f.write(anexo["conteudo"])
+
+                    print(f"PDF salvo em: {caminho_pdf}")
+                    break  # salva só o primeiro PDF encontrado
+
+            return True
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return False
+
     def cadastrar_produtos(self, dados_fornecedor, dados_nf):
         try:
             produtos = []
@@ -646,9 +701,10 @@ class ConferenciaXmlNf:
                 um = prod_nf['um']
                 ncm = self.remove_espacos_e_especiais(prod_nf['ncm'])
                 cfop = self.remove_espacos_e_especiais(prod_nf['cfop'])
-                qtde = valores_para_float(prod_nf['quantidade'])
-                unit = valores_para_float(prod_nf['valor_unitario'])
-                ipi = valores_para_float(prod_nf['ipi_prod'])
+                qtde = Decimal(str(prod_nf['quantidade']))
+                unit = Decimal(str(prod_nf['valor_unitario']))
+                ipi_val = prod_nf['ipi_prod']
+                ipi = Decimal(str(ipi_val)) if ipi_val not in (None, "") else Decimal("0.0")
                 inf_produto = prod_nf['informacoes_adicionais']
 
                 cursor = conecta.cursor()
@@ -736,9 +792,7 @@ class ConferenciaXmlNf:
             volume = int(dados_nf['transportadora']['qVol'])
 
             esp_volume = dados_nf['transportadora']['esp']
-
-            if isinstance(esp_volume, list):
-                esp_volume = esp_volume[0]
+            esp_volume = esp_volume[0] if esp_volume else None
 
             peso_bruto = valores_para_float(dados_nf['transportadora']['peso_bruto'])
             peso_liq = valores_para_float(dados_nf['transportadora']['peso_liquido'])
@@ -761,18 +815,19 @@ class ConferenciaXmlNf:
                 volume,
                 esp_volume,
                 peso_bruto,
-                peso_liq
+                peso_liq,
+                "PENDENTE"
             )
 
             sql_pre = """
-                INSERT INTO PRE_NF_COMPRA (ID, 
+                INSERT INTO PRE_NF_ENTRADA (ID, 
                 CHAVE_NFE, NUMERO_NF, SERIE, DATA_EMISSAO, NAT_OP, TP_NF, ID_FORNECEDOR, 
                 VALOR_PRODUTOS, VALOR_TOTAL, VALOR_IPI, VALOR_FRETE, VALOR_DESCONTO, VALOR_OUTRO, 
-                ID_TRANSPORTADOR, VOLUME, ESP_VOLUME, PESO_BRUTO, PESO_LIQUIDO)
-                VALUES (GEN_ID(GEN_PRE_NF_COMPRA_ID, 1), 
+                ID_TRANSPORTADOR, VOLUME, ESP_VOLUME, PESO_BRUTO, PESO_LIQUIDO, STATUS)
+                VALUES (GEN_ID(GEN_PRE_NF_ENTRADA_ID, 1), 
                 ?, ?, ?, ?, ?, ?, ?, 
                 ?, ?, ?, ?, ?, ?, 
-                ?, ?, ?, ?, ?)
+                ?, ?, ?, ?, ?, ?)
                 RETURNING ID
                 """
 
@@ -796,10 +851,10 @@ class ConferenciaXmlNf:
                 )
 
                 sql_pre_prod = """
-                    INSERT INTO PRE_NF_COMPRA_PRODUTOS (ID, 
+                    INSERT INTO PRE_NF_ENTRADA_PRODUTOS (ID, 
                     ID_NF_PRE, ITEM, ID_PRODUTO_FORN, CFOP, QTDE, UNIT, IPI, OBS
                     )
-                    VALUES (GEN_ID(GEN_PRE_NF_COMPRA_PRODUTOS_ID, 1), 
+                    VALUES (GEN_ID(GEN_PRE_NF_ENTRADA_PRODUTOS_ID, 1), 
                     ?, ?, ?, ?, ?, ?, ?, ?)
                     """
                 cursor.execute(sql_pre_prod, valores_item)
@@ -817,9 +872,9 @@ class ConferenciaXmlNf:
                     )
 
                     sql_pre_prod = """
-                                        INSERT INTO PRE_NF_COMPRA_FATURAS (
+                                        INSERT INTO PRE_NF_ENTRADA_FATURAS (
                                         ID, ID_NF_PRE, VENCIMENTO, VALOR)
-                                        VALUES (GEN_ID(GEN_PRE_NF_COMPRA_FATURAS_ID, 1), ?, ?, ?)
+                                        VALUES (GEN_ID(GEN_PRE_NF_ENTRADA_FATURAS_ID, 1), ?, ?, ?)
                                         """
                     cursor.execute(sql_pre_prod, valores_fatura)
 

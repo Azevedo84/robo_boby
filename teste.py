@@ -1,203 +1,170 @@
 import sys
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFrame, QTableWidget, QTableWidgetItem,
-    QScrollArea, QSizePolicy
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QTableWidget, QTableWidgetItem, QPushButton,
+    QLineEdit, QLabel, QHeaderView
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QColor
 
 
-class Card(QFrame):
-    def __init__(self, title):
-        super().__init__()
-        self.setObjectName("card")
-        self.setFrameShape(QFrame.StyledPanel)
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        titulo = QLabel(title)
-        titulo.setObjectName("cardTitle")
-        layout.addWidget(titulo)
-
-        self.content = QVBoxLayout()
-        layout.addLayout(self.content)
-
-
-class DashboardNF(QWidget):
+class TelaEntradaNF(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Detalhes da Nota Fiscal")
-        self.resize(600, 900)  # Ideal para tablet 10"
 
-        main_layout = QVBoxLayout(self)
+        self.setWindowTitle("Entrada de NF de Compra")
+        self.resize(1100, 500)
 
-        # Scroll principal
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        main_layout.addWidget(scroll)
+        layout_principal = QVBoxLayout(self)
 
-        container = QWidget()
-        scroll.setWidget(container)
+        # ===== TABELA =====
+        self.tabela = QTableWidget()
+        self.tabela.setColumnCount(6)
+        self.tabela.setHorizontalHeaderLabels([
+            "Produto",
+            "Qtd NF",
+            "Qtd OC",
+            "Qtd Conferida",
+            "Destino",
+            "Status"
+        ])
 
-        layout = QVBoxLayout(container)
+        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        layout_principal.addWidget(self.tabela)
 
-        # =========================
-        # HEADER
-        # =========================
-        header = QFrame()
-        header.setObjectName("header")
-        header_layout = QVBoxLayout(header)
-
-        lbl_nf = QLabel("NF Nº: 12345  |  Série: 1")
-        lbl_nf.setObjectName("headerText")
-
-        lbl_data = QLabel("Data Emissão: 12/04/2024")
-        lbl_total = QLabel("Valor Total: R$ 15.420,00")
-        lbl_total.setObjectName("valorTotal")
-
-        status = QLabel("PENDENTE")
-        status.setObjectName("status")
-
-        header_layout.addWidget(lbl_nf)
-        header_layout.addWidget(lbl_data)
-        header_layout.addWidget(lbl_total)
-        header_layout.addWidget(status)
-
-        layout.addWidget(header)
-
-        # =========================
-        # FORNECEDOR
-        # =========================
-        card_fornecedor = Card("Dados do Fornecedor")
-        card_fornecedor.content.addWidget(QLabel("TechProdutos S.A."))
-        card_fornecedor.content.addWidget(QLabel("CNPJ: 12.345.678/0001-90"))
-        card_fornecedor.content.addWidget(QLabel("Tel: (11) 3333-4444"))
-        card_fornecedor.content.addWidget(QLabel("Email: contato@tech.com"))
-
-        layout.addWidget(card_fornecedor)
-
-        # =========================
-        # ITENS
-        # =========================
-        card_itens = Card("Itens da Nota Fiscal")
-
-        tabela = QTableWidget()
-        tabela.setColumnCount(4)
-        tabela.setHorizontalHeaderLabels(["Código", "Produto", "Qtde", "Valor"])
-
-        itens = [
-            ("1001", "Notebook Lenovo", "5", "R$ 2.500,00"),
-            ("2002", "Mouse Óptico", "10", "R$ 30,00"),
-            ("3050", "Teclado Mecânico", "8", "R$ 150,00"),
-        ]
-
-        tabela.setRowCount(len(itens))
-
-        for row, item in enumerate(itens):
-            for col, dado in enumerate(item):
-                tabela.setItem(row, col, QTableWidgetItem(dado))
-
-        tabela.resizeColumnsToContents()
-        card_itens.content.addWidget(tabela)
-
-        layout.addWidget(card_itens)
-
-        # =========================
-        # RESUMO
-        # =========================
-        card_resumo = Card("Resumo da Nota")
-
-        card_resumo.content.addWidget(QLabel("Total Produtos: R$ 15.400,00"))
-        card_resumo.content.addWidget(QLabel("ICMS: R$ 1.200,00"))
-        card_resumo.content.addWidget(QLabel("IPI: R$ 300,00"))
-        card_resumo.content.addWidget(QLabel("Frete: R$ 100,00"))
-        card_resumo.content.addWidget(QLabel("Desconto: R$ 80,00"))
-        card_resumo.content.addWidget(QLabel("Valor Final: R$ 15.420,00"))
-
-        layout.addWidget(card_resumo)
-
-        # =========================
-        # OBSERVAÇÕES
-        # =========================
-        card_obs = Card("Observações")
-        card_obs.content.addWidget(QLabel("Verificar quantidades e conferir mercadoria."))
-
-        layout.addWidget(card_obs)
-
-        # =========================
-        # BOTÕES
-        # =========================
-        botoes_layout = QHBoxLayout()
-
-        btn_entrada = QPushButton("Dar Entrada")
-        btn_aprovar = QPushButton("Aprovar")
-        btn_rejeitar = QPushButton("Rejeitar")
-
-        btn_entrada.setObjectName("btnAzul")
-        btn_aprovar.setObjectName("btnVerde")
-        btn_rejeitar.setObjectName("btnVermelho")
-
-        botoes_layout.addWidget(btn_entrada)
-        botoes_layout.addWidget(btn_aprovar)
-        botoes_layout.addWidget(btn_rejeitar)
-
-        layout.addLayout(botoes_layout)
-
-        # =========================
-        # ESTILO (QSS)
-        # =========================
-        self.setStyleSheet("""
-        QWidget {
-            font-size: 16px;
-        }
-
-        #header {
-            background-color: #2c3e50;
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-        }
-
-        #valorTotal {
-            font-size: 20px;
-            font-weight: bold;
-        }
-
-        #status {
-            background-color: orange;
-            padding: 5px;
-            border-radius: 5px;
-            max-width: 120px;
-        }
-
-        #card {
-            background: #f4f6f7;
-            padding: 15px;
-            border-radius: 10px;
-        }
-
-        #cardTitle {
-            font-weight: bold;
-            font-size: 18px;
-        }
-
-        QPushButton {
-            padding: 15px;
-            border-radius: 8px;
-            color: white;
-            font-weight: bold;
-        }
-
-        #btnAzul { background-color: #2980b9; }
-        #btnVerde { background-color: #27ae60; }
-        #btnVermelho { background-color: #c0392b; }
+        # ===== BOTÃO CONFIRMAR =====
+        self.btn_confirmar = QPushButton("Confirmar Entrada")
+        self.btn_confirmar.setEnabled(False)
+        self.btn_confirmar.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                font-size: 16px;
+                padding: 8px;
+                border-radius: 6px;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
         """)
 
+        layout_principal.addWidget(self.btn_confirmar)
 
+        # Dados simulados
+        self.carregar_dados_exemplo()
+
+    # ==========================================================
+    # CARREGA ITENS DE EXEMPLO
+    # ==========================================================
+    def carregar_dados_exemplo(self):
+
+        dados = [
+            ("Parafuso 5/16", 10, 10, "OP-4587"),
+            ("Chapa de Aço 3mm", 5, 5, "OP-4587"),
+            ("Tubo de Ferro 2\"", 8, 8, "Estoque")
+        ]
+
+        self.tabela.setRowCount(len(dados))
+
+        for linha, (produto, qtd_nf, qtd_oc, destino) in enumerate(dados):
+
+            self.tabela.setItem(linha, 0, QTableWidgetItem(produto))
+            self.tabela.setItem(linha, 1, QTableWidgetItem(str(qtd_nf)))
+            self.tabela.setItem(linha, 2, QTableWidgetItem(str(qtd_oc)))
+            self.tabela.setItem(linha, 4, QTableWidgetItem(destino))
+
+            # Criar célula personalizada para conferência
+            widget = self.criar_widget_conferencia(linha, qtd_nf)
+            self.tabela.setCellWidget(linha, 3, widget)
+
+            # Status inicial
+            status = QTableWidgetItem("Pendente")
+            status.setBackground(QColor("#f8d7da"))  # vermelho claro
+            self.tabela.setItem(linha, 5, status)
+
+    # ==========================================================
+    # CRIA QLineEdit + BOTÃO ✔ DENTRO DA CÉLULA
+    # ==========================================================
+    def criar_widget_conferencia(self, linha, valor_inicial):
+
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(2, 2, 2, 2)
+
+        line = QLineEdit()
+        line.setText(str(valor_inicial))
+        line.setFixedWidth(60)
+
+        btn_ok = QPushButton("✔")
+        btn_ok.setFixedWidth(30)
+        btn_ok.setStyleSheet("background-color: #ffc107;")
+
+        # ENTER valida
+        line.returnPressed.connect(lambda: self.validar_item(linha))
+
+        # Clique valida
+        btn_ok.clicked.connect(lambda: self.validar_item(linha))
+
+        layout.addWidget(line)
+        layout.addWidget(btn_ok)
+
+        return container
+
+    # ==========================================================
+    # VALIDA ITEM
+    # ==========================================================
+    def validar_item(self, linha):
+
+        qtd_nf = int(self.tabela.item(linha, 1).text())
+
+        widget = self.tabela.cellWidget(linha, 3)
+        line = widget.layout().itemAt(0).widget()
+        qtd_conferida = int(line.text())
+
+        status_item = self.tabela.item(linha, 5)
+
+        if qtd_conferida == qtd_nf:
+            status_item.setText("OK")
+            status_item.setBackground(QColor("#d4edda"))  # verde claro
+            self.pintar_linha(linha, QColor("#e9f7ef"))
+        else:
+            status_item.setText("Divergente")
+            status_item.setBackground(QColor("#fff3cd"))  # amarelo
+            self.pintar_linha(linha, QColor("#fff8e1"))
+
+        self.verificar_se_pode_confirmar()
+
+    # ==========================================================
+    # PINTA LINHA
+    # ==========================================================
+    def pintar_linha(self, linha, cor):
+
+        for col in range(self.tabela.columnCount()):
+            item = self.tabela.item(linha, col)
+            if item:
+                item.setBackground(cor)
+
+    # ==========================================================
+    # VERIFICA SE TODOS ITENS ESTÃO OK
+    # ==========================================================
+    def verificar_se_pode_confirmar(self):
+
+        todos_ok = True
+
+        for linha in range(self.tabela.rowCount()):
+            status = self.tabela.item(linha, 5).text()
+            if status != "OK":
+                todos_ok = False
+                break
+
+        self.btn_confirmar.setEnabled(todos_ok)
+
+
+# ==========================================================
+# EXECUTAR
+# ==========================================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = DashboardNF()
-    window.show()
+    janela = TelaEntradaNF()
+    janela.show()
     sys.exit(app.exec_())

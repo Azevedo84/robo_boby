@@ -4,14 +4,14 @@ import subprocess
 # CONFIGURAÇÕES
 # ==============================
 
-NOME_TAREFA = "07_35_data_encerrar.py"
+NOME_TAREFA = "08_00_vincular_pi_entradas.py"
 
 USUARIO = "Anderson"  # usuário do Windows
 
 PYTHONW = r"C:\Users\Anderson\PycharmProjects\robo_boby\.venv\Scripts\pythonw.exe"
-SCRIPT = r"C:\Users\Anderson\PycharmProjects\robo_boby\data_encerrar.py"
+SCRIPT = r"C:\Users\Anderson\PycharmProjects\robo_boby\vincular_pi_entradas.py"
 
-HORARIO = "07:35"
+HORARIO = "08:00"
 
 
 # ==============================
