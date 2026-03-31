@@ -111,7 +111,18 @@ class ConferenciaXmlNf:
                         msg = email.message_from_bytes(response_part[1])
 
                         from_ = msg.get("From")
-                        nome, email_remetente = parseaddr(from_)
+
+                        if isinstance(from_, Header):
+                            from_ = str(from_)
+
+                        decoded_from = ""
+                        for part, encoding in decode_header(from_):
+                            if isinstance(part, bytes):
+                                decoded_from += part.decode(encoding or "utf-8", errors="ignore")
+                            else:
+                                decoded_from += part
+
+                        nome, email_remetente = parseaddr(decoded_from)
 
                         subject, encoding = decode_header(msg.get("Subject"))[0]
                         if isinstance(subject, bytes):
@@ -206,7 +217,7 @@ class ConferenciaXmlNf:
 
                 cnpj_destinatario = dados_nf['destinatario']['cnpj']
                 chave_existe = self.conferir_chave_nf(dados_nf)
-                fornecedor_existe = self.conferir_fornecedor(dados_nf)
+                fornecedor_existe, forn_duplicado = self.conferir_fornecedor(dados_nf)
                 transportador = dados_nf["transportadora"]
 
                 if not cnpj_destinatario == self.cnpj_maquinas:
@@ -219,9 +230,14 @@ class ConferenciaXmlNf:
                     ja_foi_lancado = True
 
                 elif not fornecedor_existe:
-                    nome_fornecedor = dados_nf['emitente']['fantasia']
-                    cnpj_fornecedor = dados_nf['emitente']['cnpj']
-                    erros.append(f"O CNPJ DO FORNECEDOR NÃO ESTÁ CADASTRADO: {nome_fornecedor} - {cnpj_fornecedor}")
+                    if forn_duplicado:
+                        nome_fornecedor = dados_nf['emitente']['fantasia']
+                        cnpj_fornecedor = dados_nf['emitente']['cnpj']
+                        erros.append(f"O CNPJ DO FORNECEDOR ESTÁ DUPLICADO: {nome_fornecedor} - {cnpj_fornecedor}")
+                    else:
+                        nome_fornecedor = dados_nf['emitente']['fantasia']
+                        cnpj_fornecedor = dados_nf['emitente']['cnpj']
+                        erros.append(f"O CNPJ DO FORNECEDOR NÃO ESTÁ CADASTRADO: {nome_fornecedor} - {cnpj_fornecedor}")
                 elif transportador:
                     cnpj_transportador = dados_nf['transportadora']['cnpj']
 
@@ -604,6 +620,8 @@ class ConferenciaXmlNf:
 
     def conferir_fornecedor(self, dados_nf):
         try:
+            forn_duplicado = False
+
             cnpj_fornecedor = dados_nf['emitente']['cnpj']
 
             cursor = conecta.cursor()
@@ -612,8 +630,12 @@ class ConferenciaXmlNf:
                            f"WHERE cnpj = '{cnpj_fornecedor}';")
             dados_fornecedor = cursor.fetchall()
 
+            if len(dados_fornecedor) > 1:
+                forn_duplicado = True
 
-            return dados_fornecedor
+                dados_fornecedor = []
+
+            return dados_fornecedor, forn_duplicado
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

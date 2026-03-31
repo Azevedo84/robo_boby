@@ -14,3 +14,10 @@ conecta_robo = fdb.connect(database=r'C:\HallSys\db\Horus\Suzuki\ROBOZINHO.GDB',
                               user='sysdba',
                               password='masterkey',
                               charset='ANSI')
+
+conecta_engenharia = fdb.connect(database=r'C:\HallSys\db\Horus\Suzuki\ENGENHARIA_UTF8.GDB',
+                              host='PUBLICO',
+                              port=3050,
+                              user='sysdba',
+                              password='masterkey',
+                              charset='UTF8')

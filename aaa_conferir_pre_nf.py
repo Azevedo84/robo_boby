@@ -224,13 +224,13 @@ class ConferirPreNF:
         try:
             cursor_nf = conecta.cursor()
             cursor_nf.execute("""
-                                SELECT ID, NUMERO_NF, ID_FORNECEDOR
-                                FROM PRE_NF_ENTRADA
-                                WHERE STATUS IS NULL 
-                                OR STATUS = 'PENDENTE' 
-                                OR STATUS = 'DIVERGENCIA'
-                            """)
-
+                            SELECT ID, NUMERO_NF, ID_FORNECEDOR
+                            FROM PRE_NF_ENTRADA
+                            WHERE 
+                                (STATUS IS NULL OR STATUS NOT IN ('VINCULADA', 'NF DIFERENTE'))
+                                OR
+                                (STATUS_ESTOQUE IS NULL OR STATUS_ESTOQUE <> 'ENCERRADO')
+                        """)
             nfs = cursor_nf.fetchall()
 
             return nfs
@@ -261,8 +261,9 @@ class ConferirPreNF:
 
             if gera_oc == 'S':
                 nf_com_oc = True
-            else:
+            if not gera_oc or gera_oc == 'N':
                 qtde_cfop_dif += 1
+                return nf_tem_erro, qtde_cfop_dif, False
 
             return nf_tem_erro, qtde_cfop_dif, nf_com_oc
 
@@ -275,17 +276,22 @@ class ConferirPreNF:
         try:
             cursor_vinc = conecta.cursor()
             cursor_vinc.execute("""
-            SELECT ID_PRODUTO_SIGER
+            SELECT ID_PRODUTO_SIGER, COALESCE(FATOR_CONVERSAO,1)
             FROM PRE_PRODUTO_FORNECEDOR
             WHERE id = ?
             """, (id_prod_forn,))
+
             vinculo = cursor_vinc.fetchone()
 
-            if not vinculo[0]:
+            if not vinculo or not vinculo[0]:
                 msg = f"❌ Item Fornecedor {cod_forn} - {descr_forn} sem vínculo com produto Siger."
                 nf_tem_erro.append(msg)
+                return None, None, nf_tem_erro
 
-            return vinculo, nf_tem_erro
+            id_produto_siger = vinculo[0]
+            fator = vinculo[1]
+
+            return id_produto_siger, fator, nf_tem_erro
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -294,104 +300,133 @@ class ConferirPreNF:
 
     def verifica_oc_e_movimento(self, id_prod_siger, id_prod_nf, dados_nf, dados_prod_nf, nf_tem_erro):
         try:
+
             id_nf, numero_nf, id_fornecedor = dados_nf
-            qtde_nf, valor_nf, ipi_nf = dados_prod_nf
+            qtde_nf_convertida, valor_nf, ipi_nf = dados_prod_nf
 
             cur = conecta.cursor()
-            cur.execute(f"SELECT codigo, descricao, COALESCE(obs, ''), unidade "
-                        f"FROM produto where id = {id_prod_siger};")
-            detalhes_produto = cur.fetchall()
-            cod_prod, descricao, referencia, unidade = detalhes_produto[0]
-
-            cursor_oc = conecta.cursor()
-            cursor_oc.execute("""
-            SELECT oc.numero, prodoc.ID, prodoc.QUANTIDADE, prodoc.UNITARIO, prodoc.IPI
-            FROM ordemcompra as oc
-            INNER JOIN produtoordemcompra as prodoc ON oc.id = prodoc.mestre
-            WHERE oc.entradasaida = 'E' 
-            and oc.STATUS = 'A' 
-            and prodoc.PRODUTO = ?
+            cur.execute("""
+            SELECT codigo, descricao, COALESCE(obs,''), unidade
+            FROM produto
+            WHERE id = ?
             """, (id_prod_siger,))
-            oc = cursor_oc.fetchall()
+            cod_prod, descricao, referencia, unidade = cur.fetchone()
 
-            if not oc:
-                cursor = conecta.cursor()
-                cursor.execute("""
-                SELECT oc.numero, prodoc.ID, ent.QUANTIDADE, ent.MOVIMENTACAO, ent.FORNECEDOR, 
-                ent.NOTA, ent.NATUREZA, ent.ORDEMCOMPRA, ent.CODIGO
-                FROM ENTRADAPROD as ent
-                INNER JOIN ordemcompra as oc ON ent.ORDEMCOMPRA = oc.id
-                INNER JOIN produtoordemcompra as prodoc ON oc.id = prodoc.mestre
-                WHERE ent.NOTA = ? 
-                and ent.FORNECEDOR = ? 
-                and ent.PRODUTO = ?
-                """, (numero_nf, id_fornecedor, id_prod_siger,))
-                dados_nf_lancada = cursor.fetchone()
+            # -----------------------------------------
+            # 1️⃣ procurar primeiro em ENTRADAPROD
+            # -----------------------------------------
 
-                if not dados_nf_lancada:
-                    msg = f"❌ Produto {cod_prod} - {descricao} - {referencia} não encontrado na OC."
-                    nf_tem_erro.append(msg)
-                else:
-                    id_prod_oc = dados_nf_lancada[1]
-                    qtde_lancada = dados_nf_lancada[2]
+            cursor_ent = conecta.cursor()
+            cursor_ent.execute("""
+            SELECT ent.QUANTIDADE, prodoc.ID
+            FROM ENTRADAPROD ent
+            LEFT JOIN PRODUTOORDEMCOMPRA prodoc
+            ON ent.ORDEMCOMPRA = prodoc.MESTRE
+            AND ent.PRODUTO = prodoc.PRODUTO
+            WHERE ent.NOTA = ?
+            AND ent.FORNECEDOR = ?
+            AND ent.PRODUTO = ?
+            """, (numero_nf, id_fornecedor, id_prod_siger))
+            entrada = cursor_ent.fetchone()
 
-                    cursor_check = conecta.cursor()
-                    cursor_check.execute("""
-                    SELECT 1
-                    FROM PRE_NF_OC_VINCULO
-                    WHERE ID_PRODUTO_NF = ?
-                    AND ID_PRODUTO_OC = ?
-                    """, (id_prod_nf, id_prod_oc))
+            if entrada:
 
-                    ja_existe = cursor_check.fetchone()
+                qtde_lancada, id_prod_oc = entrada
+                qtde_oc = qtde_lancada
 
-                    if not ja_existe:
-                        cursor_insert = conecta.cursor()
-                        cursor_insert.execute("""
-                        INSERT INTO PRE_NF_OC_VINCULO
-                        (id, ID_NF_PRE, ID_PRODUTO_NF, ID_PRODUTO_OC, QTDE_FORN, QTDE_SIGER)
-                        VALUES (GEN_ID(GEN_PRE_NF_OC_VINCULO_ID,1), ?, ?, ?, ?, ?)
-                        """, (id_nf, id_prod_nf, id_prod_oc, qtde_nf, qtde_lancada ))
-
-                        conecta.commit()
-
-            elif len(oc) > 1:
-                msg = f"O MESMO ITEM REPETIDO NA OC!"
-                nf_tem_erro.append(msg)
             else:
+
+                # -----------------------------------------
+                # 2️⃣ procurar OC aberta
+                # -----------------------------------------
+
+                cursor_oc = conecta.cursor()
+                cursor_oc.execute("""
+                SELECT oc.numero, prodoc.ID, prodoc.QUANTIDADE, prodoc.UNITARIO, prodoc.IPI
+                FROM ordemcompra oc
+                INNER JOIN produtoordemcompra prodoc ON oc.id = prodoc.mestre
+                WHERE oc.entradasaida = 'E'
+                AND oc.STATUS = 'A'
+                AND oc.FORNECEDOR = ?
+                AND prodoc.PRODUTO = ?
+                """, (id_fornecedor, id_prod_siger))
+                oc = cursor_oc.fetchall()
+
+                if not oc:
+                    msg = f"❌ Produto {cod_prod} - {descricao} não encontrado na NF lançada nem em OC aberta."
+                    nf_tem_erro.append(msg)
+                    return nf_tem_erro
+
+                if len(oc) > 1:
+                    msg = f"❌ Produto {cod_prod} aparece em mais de uma OC aberta."
+                    nf_tem_erro.append(msg)
+                    return nf_tem_erro
+
                 num_oc, id_prod_oc, qtde_oc, valor_oc, ipi_oc = oc[0]
 
-                if qtde_nf != qtde_oc:
-                    msg = f"❌ Divergência de quantidade no item {cod_prod} - {descricao} - {referencia} na OC {num_oc}"
+                if qtde_nf_convertida != qtde_oc:
+                    msg = f"❌ Divergência de quantidade no item {cod_prod} - OC {num_oc}"
                     nf_tem_erro.append(msg)
 
-                if valor_nf != valor_oc:
-                    msg = f"❌ Divergência de valor no item {cod_prod} - {descricao} - {referencia} na OC {num_oc}"
+                total_nf = round(qtde_nf_convertida * valor_nf, 2)
+                total_oc = round(qtde_oc * valor_oc, 2)
+
+                if abs(total_nf - total_oc) > 0.01:
+                    """
+                    print("\n--- DEBUG COMPARAÇÃO ---")
+                    print("Produto:", cod_prod)
+                    print("Qtde NF convertida:", qtde_nf_convertida)
+                    print("Valor NF unit:", valor_nf)
+                    print("TOTAL NF:", total_nf)
+
+                    print("Qtde OC:", qtde_oc)
+                    print("Valor OC unit:", valor_oc)
+                    print("TOTAL OC:", total_oc)
+                    print("------------------------\n")
+                    """
+                    msg = f"❌ Divergência de valor no item {cod_prod} - OC {num_oc}"
                     nf_tem_erro.append(msg)
 
                 if ipi_nf != ipi_oc:
-                    msg = f"❌ Divergência de IPI no item {cod_prod} - {descricao} - {referencia} na OC {num_oc}"
+                    """
+                    print("\n--- DEBUG COMPARAÇÃO ---")
+                    print("Produto:", cod_prod)
+                    print("Qtde NF convertida:", qtde_nf_convertida)
+                    print("Valor NF unit:", valor_nf)
+                    print("TOTAL NF:", total_nf)
+
+                    print("Qtde OC:", qtde_oc)
+                    print("Valor OC unit:", valor_oc)
+                    print("TOTAL OC:", total_oc)
+                    print("------------------------\n")
+                    """
+                    msg = f"❌ Divergência de IPI no item {cod_prod} - OC {num_oc}"
                     nf_tem_erro.append(msg)
 
-                cursor_check = conecta.cursor()
-                cursor_check.execute("""
-                                    SELECT 1
-                                    FROM PRE_NF_OC_VINCULO
-                                    WHERE ID_PRODUTO_NF = ?
-                                    AND ID_PRODUTO_OC = ?
-                                    """, (id_prod_nf, id_prod_oc))
+            # -----------------------------------------
+            # 3️⃣ recriar vínculo (sempre limpa antes)
+            # -----------------------------------------
 
-                ja_existe = cursor_check.fetchone()
+            cursor_delete = conecta.cursor()
+            cursor_delete.execute("""
+            DELETE FROM PRE_NF_OC_VINCULO
+            WHERE ID_PRODUTO_NF = ?
+            """, (id_prod_nf,))
 
-                if not ja_existe:
-                    cursor_insert = conecta.cursor()
-                    cursor_insert.execute("""
-                                        INSERT INTO PRE_NF_OC_VINCULO
-                                        (id, ID_NF_PRE, ID_PRODUTO_NF, ID_PRODUTO_OC, QTDE_FORN, QTDE_SIGER)
-                                        VALUES (GEN_ID(GEN_PRE_NF_OC_VINCULO_ID,1), ?, ?, ?, ?, ?)
-                                        """, (id_nf, id_prod_nf, id_prod_oc, qtde_nf, qtde_oc))
+            cursor_insert = conecta.cursor()
+            cursor_insert.execute("""
+            INSERT INTO PRE_NF_OC_VINCULO
+            (ID, ID_NF_PRE, ID_PRODUTO_NF, ID_PRODUTO_OC, QTDE_FORN, QTDE_SIGER)
+            VALUES (GEN_ID(GEN_PRE_NF_OC_VINCULO_ID,1), ?, ?, ?, ?, ?)
+            """, (
+                id_nf,
+                id_prod_nf,
+                id_prod_oc,
+                qtde_nf_convertida,
+                qtde_oc
+            ))
 
-                    conecta.commit()
+            conecta.commit()
 
             return nf_tem_erro
 
@@ -425,14 +460,31 @@ class ConferirPreNF:
                     nf_tem_erro, qtde_cfop_dif, nf_com_oc = self.verifica_se_nf_com_oc(cfop, qtde_cfop_dif, nf_tem_erro)
 
                     if nf_com_oc:
-                        dados_produto_s, nf_tem_erro = self.verifica_prod_forn_siger(id_prod_forn, cod_forn, descr_forn, nf_tem_erro)
+                        id_prod_siger, fator, nf_tem_erro = self.verifica_prod_forn_siger(
+                            id_prod_forn,
+                            cod_forn,
+                            descr_forn,
+                            nf_tem_erro
+                        )
 
-                        if dados_produto_s[0]:
-                            id_prod_siger = dados_produto_s[0]
+                        if id_prod_siger:
+                            qtde_convertida = round(qtde_nf * fator, 4)
 
-                            dados_prod_nf = (qtde_nf, valor_nf, ipi_nf)
+                            valor_unit_convertido = round(valor_nf / fator, 4)
 
-                            nf_tem_erro = self.verifica_oc_e_movimento(id_prod_siger, id_prod_nf, dados_nf, dados_prod_nf, nf_tem_erro)
+                            dados_prod_nf = (
+                                qtde_convertida,
+                                valor_unit_convertido,
+                                ipi_nf
+                            )
+
+                            nf_tem_erro = self.verifica_oc_e_movimento(
+                                id_prod_siger,
+                                id_prod_nf,
+                                dados_nf,
+                                dados_prod_nf,
+                                nf_tem_erro
+                            )
 
             return nf_tem_erro, qtde_produtos_nf, qtde_cfop_dif
 
@@ -482,6 +534,8 @@ class ConferirPreNF:
                     id_nf, numero_nf, id_fornecedor = nf
                     print(f"\n🔎 Conferindo NF {numero_nf}")
 
+                    self.atualizar_status_estoque_nf(id_nf, numero_nf, id_fornecedor)
+
                     nf_tem_erro = []
 
                     dados_nf = (id_nf, numero_nf, id_fornecedor)
@@ -491,21 +545,42 @@ class ConferirPreNF:
                     # =========================
                     # ATUALIZAR STATUS NF
                     # =========================
-
                     if nf_tem_erro:
                         self.manipula_divergencia(id_nf, numero_nf, nf_tem_erro)
                     elif qtde_produtos_nf == qtde_cfop_dif:
                         status = "NF DIFERENTE"
+                        status_estoque = "ENCERRADO"
 
                         cursor = conecta.cursor()
                         cursor.execute("UPDATE PRE_NF_ENTRADA "
-                                       "SET STATUS = ? "
+                                       "SET STATUS = ?, STATUS_ESTOQUE = ? "
                                        "WHERE id = ?",
-                                       (status, id_nf,))
+                                       (status, status_estoque, id_nf,))
                         conecta.commit()
 
                     else:
                         self.consulta_vinculos(id_nf, numero_nf)
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+    def cfop_gera_oc(self, cfop):
+        try:
+            cursor = conecta.cursor()
+            cursor.execute("""
+                SELECT GERA_OC
+                FROM NATOP
+                WHERE CFOP = ?
+            """, (cfop,))
+
+            regra = cursor.fetchone()
+
+            if not regra:
+                return False  # ou tratar erro
+
+            return regra[0] == 'S'
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -532,8 +607,20 @@ class ConferirPreNF:
                 id_item, id_prod_forn, cfop, qtde_nf, valor_nf, ipi_nf = item
 
                 # 🔥 Se for retorno de industrialização, não confere vínculo
-                if cfop == '5902':
+                if not self.cfop_gera_oc(cfop):
                     continue
+
+                # buscar fator
+                cursor_fator = conecta.cursor()
+                cursor_fator.execute("""
+                    SELECT COALESCE(FATOR_CONVERSAO,1)
+                    FROM PRE_PRODUTO_FORNECEDOR
+                    WHERE ID = ?
+                """, (id_prod_forn,))
+
+                fator = cursor_fator.fetchone()[0]
+
+                qtde_nf_convertida = round(qtde_nf * fator, 4)
 
                 cursor = conecta.cursor()
                 cursor.execute("""
@@ -543,10 +630,9 @@ class ConferirPreNF:
                     FROM PRE_NF_OC_VINCULO
                     WHERE ID_PRODUTO_NF = ?
                 """, (id_item,))
-
                 qtde_vinc_forn, qtde_vinc_int = cursor.fetchone()
 
-                if qtde_vinc_forn != qtde_nf:
+                if round(qtde_vinc_forn, 4) != qtde_nf_convertida:
                     msg = f"❌ ERRO: Produto {id_prod_forn} quantidade diferente da NF"
                     tem_erro.append(msg)
 
@@ -568,6 +654,75 @@ class ConferirPreNF:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
             return "ERRO"
+
+    def atualizar_status_estoque_nf(self, id_nf, numero_nf, id_fornecedor):
+        try:
+            cursor_nf = conecta.cursor()
+            cursor_nf.execute("""
+                SELECT prod_pre.ID_PRODUTO_FORN, (prod_pre.QTDE * prod_forn.FATOR_CONVERSAO)
+                FROM PRE_NF_ENTRADA_PRODUTOS as prod_pre
+                INNER JOIN PRE_PRODUTO_FORNECEDOR prod_forn ON prod_pre.ID_PRODUTO_FORN = prod_forn.id
+                WHERE prod_pre.ID_NF_PRE = ?
+            """, (id_nf,))
+            itens_nf = cursor_nf.fetchall()
+
+            if not itens_nf:
+                return
+
+            total_nf = 0
+            total_lancado = 0
+
+            for id_prod_forn, qtde_nf in itens_nf:
+
+                # busca produto siger
+                cursor = conecta.cursor()
+                cursor.execute("""
+                    SELECT ID_PRODUTO_SIGER
+                    FROM PRE_PRODUTO_FORNECEDOR
+                    WHERE ID = ?
+                """, (id_prod_forn,))
+                prod = cursor.fetchone()
+
+                if not prod or not prod[0]:
+                    continue
+
+                id_prod = prod[0]
+
+                cursor = conecta.cursor()
+                cursor.execute("""
+                    SELECT COALESCE(SUM(QUANTIDADE),0)
+                    FROM ENTRADAPROD
+                    WHERE NOTA = ?
+                    AND FORNECEDOR = ?
+                    AND PRODUTO = ?
+                """, (numero_nf, id_fornecedor, id_prod))
+
+                qtde_lancada = cursor.fetchone()[0]
+
+                total_nf += qtde_nf
+                total_lancado += qtde_lancada
+
+            # define status
+            if total_lancado == 0:
+                status = "PENDENTE"
+            elif total_lancado < total_nf:
+                status = "PARCIAL"
+            else:
+                status = "ENCERRADO"
+
+            cursor_update = conecta.cursor()
+            cursor_update.execute("""
+                UPDATE PRE_NF_ENTRADA
+                SET STATUS_ESTOQUE = ?
+                WHERE ID = ?
+            """, (status, id_nf))
+
+            conecta.commit()
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
 
 

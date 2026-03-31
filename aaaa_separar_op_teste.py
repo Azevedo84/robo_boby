@@ -670,7 +670,7 @@ class EnviaOrdensProducao:
 
     def manipula_comeco(self):
         try:
-            lista = ["8694",]
+            lista = ["8639", "8641", "8636", "8628", "8643", "8690", "8637", "8693",]
 
             for i in lista:
                 self.num_op = i

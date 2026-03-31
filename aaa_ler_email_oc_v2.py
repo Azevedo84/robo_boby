@@ -277,77 +277,120 @@ class ManipularEmailOC:
 
     def percorer_email(self, ids, imap):
         try:
+            def decode_email_header(header_value):
+                decoded = ""
+
+                for part, encoding in decode_header(header_value or ""):
+                    if isinstance(part, bytes):
+                        try:
+                            decoded += part.decode(encoding or "utf-8", errors="ignore")
+                        except (LookupError, TypeError):
+                            # encoding inválido tipo "unknown-8bit"
+                            decoded += part.decode("utf-8", errors="ignore")
+                    else:
+                        decoded += part
+
+                return decoded
+
             lista_final_ocs = []
-            pdf_bytes = None
 
             # Percorre todos os e-mails
             for num in ids:
                 status, msg_data = imap.fetch(num, "(RFC822)")
+
+                if status != "OK":
+                    continue
+
                 for response_part in msg_data:
-                    if isinstance(response_part, tuple):
-                        msg = email.message_from_bytes(response_part[1])
+                    if not isinstance(response_part, tuple):
+                        continue
 
-                        # Remetente e assunto
-                        from_ = msg.get("From")
-                        nome, email_remetente = parseaddr(from_)
-                        subject, encoding = decode_header(msg.get("Subject"))[0]
-                        if isinstance(subject, bytes):
-                            subject = subject.decode(encoding if encoding else "utf-8")
+                    msg = email.message_from_bytes(response_part[1])
 
-                        print(f"\n")
-                        print(f"De: {email_remetente}")
-                        print(f"Assunto: {subject}")
+                    # =========================
+                    # FROM
+                    # =========================
+                    from_raw = msg.get("From", "")
+                    decoded_from = decode_email_header(from_raw)
+                    nome, email_remetente = parseaddr(decoded_from)
 
-                        # Processa e-mails multipart (com anexos)
-                        if msg.is_multipart():
-                            for part in msg.walk():
-                                filename = part.get_filename()
-                                if filename:
-                                    # Decodifica corretamente o nome do arquivo
-                                    decoded_filename, charset = decode_header(filename)[0]
-                                    if isinstance(decoded_filename, bytes):
-                                        decoded_filename = decoded_filename.decode(charset or "utf-8")
+                    # =========================
+                    # SUBJECT
+                    # =========================
+                    subject_raw = msg.get("Subject", "")
+                    subject = decode_email_header(subject_raw)
 
-                                    texto = ""
+                    print(f"\nDe: {email_remetente}")
+                    print(f"Assunto: {subject}")
 
-                                    # Processa apenas PDFs
-                                    if decoded_filename.lower().endswith(".pdf"):
-                                        # Lê o PDF em memória
-                                        pdf_bytes = part.get_payload(decode=True)
-                                        pdf_file = BytesIO(pdf_bytes)
-                                        reader = PdfReader(pdf_file)
+                    # =========================
+                    # PROCESSAMENTO
+                    # =========================
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            filename_raw = part.get_filename()
 
-                                        for page in reader.pages:
-                                            page_content = page.extract_text()
-                                            if page_content:
-                                                texto += page_content
+                            if not filename_raw:
+                                continue
 
-                                    # filtro OC SUZUKI
-                                    if ("O.C.:" in texto
-                                        and "Emissão:" in texto
-                                        and "SUZUKI RECICLAD IND.MAQ" in texto
-                                        and "93.183.853/0001-97" in texto
-                                        and pdf_bytes):
-                                        dados = self.filtrar_email_com_ordem_pdf(num, pdf_bytes, texto)
-                                        if dados:
-                                            lista_final_ocs.append(dados)
+                            # Decodifica nome do arquivo
+                            decoded_filename = decode_email_header(filename_raw)
 
-                                            print(f"EMAIL DE ORDEM DE COMPRA")
-                                            print(f"\n")
-                                    else:
-                                        print("NÃO É ORDEM DE COMPRA")
+                            texto = ""
+                            pdf_bytes = None
 
-                        else:
-                            print("EMAIL SEM ANEXO")
-                            # Caso não seja multipart (sem anexos)
-                            body = msg.get_payload(decode=True).decode()
-                            print("Corpo:", body[:200], "...")
+                            # =========================
+                            # PROCESSA PDF
+                            # =========================
+                            if decoded_filename.lower().endswith(".pdf"):
+                                try:
+                                    pdf_bytes = part.get_payload(decode=True)
 
-            # ✅ Só retorna se os dois existirem
-            if lista_final_ocs:
-                return lista_final_ocs
+                                    if not pdf_bytes:
+                                        continue
 
-            return None
+                                    pdf_file = BytesIO(pdf_bytes)
+                                    reader = PdfReader(pdf_file)
+
+                                    for page in reader.pages:
+                                        page_content = page.extract_text()
+                                        if page_content:
+                                            texto += page_content
+
+                                except Exception as e:
+                                    print(f"Erro ao ler PDF: {e}")
+                                    continue
+
+                            # =========================
+                            # FILTRO OC
+                            # =========================
+                            if (
+                                    texto
+                                    and "O.C.:" in texto
+                                    and "Emissão:" in texto
+                                    and "SUZUKI RECICLAD IND.MAQ" in texto
+                                    and "93.183.853/0001-97" in texto
+                                    and pdf_bytes
+                            ):
+                                dados = self.filtrar_email_com_ordem_pdf(num, pdf_bytes, texto)
+
+                                if dados:
+                                    lista_final_ocs.append(dados)
+                                    print("EMAIL DE ORDEM DE COMPRA\n")
+                            else:
+                                print("NÃO É ORDEM DE COMPRA")
+
+                    else:
+                        print("EMAIL SEM ANEXO")
+                        body = msg.get_payload(decode=True)
+
+                        if body:
+                            try:
+                                print("Corpo:", body.decode(errors="ignore")[:200], "...")
+                            except:
+                                print("Erro ao decodificar corpo")
+
+            return lista_final_ocs if lista_final_ocs else None
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -463,6 +506,18 @@ class ManipularEmailOC:
             # ESTRATÉGIAS DE EXTRAÇÃO
             # ----------------------------------
             estrategias = [
+
+                (
+                    "codigo_pos_MTS",
+                    130,
+                    r'\b\d+MTS(\d{4,6})\b'
+                ),
+
+                (
+                    "codigo_inicio_descricao",
+                    80,
+                    r'\b(\d{4,6})\s+[A-Z]'
+                ),
 
                 # ⭐ NOVA ESTRATÉGIA
                 # captura casos como:
@@ -618,11 +673,9 @@ class ManipularEmailOC:
                 codigo = req["codigo"]
                 qtde_req = req["quantidade"]
 
-                if codigo in texto_item:
-
-                    if abs(qtde_req - qtde_pdf) < 0.001:
-                        print(f"✔ Produto encontrado pela requisição: {codigo}")
-                        return codigo
+                # 🔧 CORREÇÃO: evitar falso positivo
+                if re.search(rf'\b{codigo}\b', texto_item):
+                    return codigo
 
             return None
 
@@ -677,7 +730,17 @@ class ManipularEmailOC:
 
             for item_txt in itens_brutos:
 
-                print("\nITEM ENCONTRADO:")
+                print("\nITEM ORIGINAL:")
+                print(item_txt)
+
+                # =========================
+                # 🔧 NORMALIZAÇÃO (CORREÇÃO PRINCIPAL)
+                # =========================
+                item_txt = item_txt.replace("\n", " ")
+                item_txt = re.sub(r'\s+', ' ', item_txt)
+                item_txt = re.sub(r'\b\d+MTS\b', '', item_txt, flags=re.IGNORECASE)
+
+                print("ITEM NORMALIZADO:")
                 print(item_txt)
 
                 dados_match = re.search(
@@ -694,6 +757,7 @@ class ManipularEmailOC:
                 )
 
                 if not dados_match:
+                    print("❌ Não encontrou dados do item")
                     continue
 
                 qtde = dados_match.group(1)
@@ -703,16 +767,25 @@ class ManipularEmailOC:
                 ipi = dados_match.group(5)
                 entrega = dados_match.group(6)
 
+                # =========================
+                # 🔍 TENTA POR REQUISIÇÃO
+                # =========================
                 codigo_produto = self.encontrar_produto_por_requisicao(
                     item_txt,
                     qtde,
                     requisicoes
                 )
 
+                # =========================
+                # 🔧 FALLBACK: EXTRAI DO TEXTO
+                # =========================
+                if not codigo_produto:
+                    codigo_produto = self.extrair_codigo_produto(item_txt)
+
                 print("codigo encontrado:", codigo_produto)
 
                 if not codigo_produto:
-                    print("❌ Produto não encontrado na requisição")
+                    print("❌ Produto não encontrado")
                     continue
 
                 itens.append({
@@ -779,6 +852,22 @@ class ManipularEmailOC:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def escolher_requisicao(self, cod_produto):
+        try:
+            requisicoes = self.manipula_dados_req(cod_produto)
+
+            if not requisicoes:
+                return None
+
+            # ✔ pega a primeira requisição aberta (FIFO)
+            return requisicoes[0]
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            return None
+
     def gravar_dados_ordens(self, imap, lista_final_ocs):
         try:
             obs_m = "OC LANÇADA PELO BOBY DE AZEVEDO"
@@ -841,8 +930,7 @@ class ManipularEmailOC:
                                 self.envia_email_sem_requisicao(texto, cod_produto)
                                 testar_erros += 1
                             elif len(dados_req) > 1:
-                                print(f'O produto {cod_produto} tem multiplas requisições')
-                                testar_erros += 1
+                                print(f'⚠ Produto {cod_produto} tem múltiplas requisições - usando a primeira')
 
                         if not testar_erros:
                             cursor = conecta.cursor()
@@ -874,9 +962,14 @@ class ManipularEmailOC:
 
                                 total_prod = ii.get("vl_total")
 
-                                dados_req = self.manipula_dados_req(cod_produto)
+                                req_escolhida = self.escolher_requisicao(cod_produto)
 
-                                num_req, item_req = dados_req[0]
+                                if not req_escolhida:
+                                    print(f'❌ Não encontrou requisição compatível para {cod_produto}')
+                                    testar_erros += 1
+                                    continue
+
+                                num_req, item_req = req_escolhida
 
                                 codigo_int = int(cod_produto)
 
