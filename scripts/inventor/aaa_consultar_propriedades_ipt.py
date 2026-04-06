@@ -3,7 +3,7 @@ import win32com.client
 #arquivo = r"\\Publico\C\Inventor\21 - Ponto Bobina\21.01.03.01.ipt"
 #arquivo = r"\\Publico\C\Inventor\21 - Ponto Bobina\21.01.03.00.iam"
 #arquivo = r"\\Publico\C\Inventor\1 - Folha A4\Cód. 21 - Ponto de Bobina\21.01.03.00 - Conj. Ponto Bob Rol\01 - 21.01.03.01.idw"
-arquivo = r"\\PUBLICO\Inventor\Picotadeira 400\Picotadeira 400 V2.0\Conj 09\9.07.00.00\9.07.03.02.ipt"
+arquivo = r"\\Publico\C\Inventor\Biblioteca\Molas\MC13X10X29\MC13X10X29.ipt"
 
 inventor = None
 doc = None

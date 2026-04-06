@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from banco_dados.conexao import conecta
+from core.banco import conecta
 
 # Caminho do arquivo na área de trabalho
 usuario = os.getlogin()

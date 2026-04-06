@@ -1,4 +1,4 @@
-from banco_dados.conexao import conecta
+from core.banco import conecta
 
 cursor = conecta.cursor()
 cursor.execute(f"SELECT ID, codigo, DESCRICAO, DESCRICAOCOMPLEMENTAR, OBS FROM produto;")

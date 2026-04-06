@@ -1,7 +1,7 @@
 import sys
-from banco_dados.conexao import conecta
-from banco_dados.controle_erros import grava_erro_banco
-from comandos.conversores import valores_para_float
+from core.banco import conecta
+from core.erros import grava_erro_banco
+from core.conversores import valores_para_float
 from datetime import timedelta, date, datetime
 import inspect
 import os
@@ -9,8 +9,8 @@ import math
 import traceback
 
 
-from comandos.excel import edita_alinhamento, edita_bordas, edita_preenchimento
-from comandos.excel import edita_fonte, criar_workbook, letra_coluna
+from core.excel import edita_alinhamento, edita_bordas, edita_preenchimento
+from core.excel import edita_fonte, criar_workbook, letra_coluna
 from pathlib import Path
 
 

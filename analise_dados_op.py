@@ -1,12 +1,12 @@
 import sys
-from banco_dados.conexao import conecta
-from banco_dados.controle_erros import grava_erro_banco
+from core.banco import conecta
+from core.erros import grava_erro_banco
 import inspect
 import os
 import traceback
 
-from comandos.excel import edita_fonte, criar_workbook, edita_preenchimento, edita_alinhamento
-from comandos.excel import edita_bordas
+from core.excel import edita_fonte, criar_workbook, edita_preenchimento, edita_alinhamento
+from core.excel import edita_bordas
 
 
 import smtplib

@@ -1,6 +1,6 @@
 import sys
-from banco_dados.conexao import conecta, conecta_robo
-from banco_dados.controle_erros import grava_erro_banco
+from core.banco import conecta, conecta_robo
+from core.erros import grava_erro_banco
 import os
 import inspect
 import smtplib

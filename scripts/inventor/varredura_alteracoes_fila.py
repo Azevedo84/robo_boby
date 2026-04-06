@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
-from banco_dados.conexao import conecta_engenharia
-from comandos.inventor import pasta_arq, ignorar_pastas, extensoes, padrao_desenho, normalizar_caminho
+from core.banco import conecta_engenharia
+from core.inventor import pasta_arq, ignorar_pastas, extensoes, padrao_desenho, normalizar_caminho, definir_classificacao
 from dados_email import email_user, password
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -137,12 +137,12 @@ def inserir_fila(cursor, id_arquivo):
         if cursor.fetchone():
             print("⚠️ Já está na fila:", id_arquivo)
             return
-
+        
         # 🔹 insere o próprio arquivo
         cursor.execute("""
-            INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO)
-            VALUES (?)
-        """, (id_arquivo,))
+            INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+            VALUES (?, ?)
+        """, (id_arquivo, "ALTERADOS"))
 
         print("📥 Inserido na fila:", id_arquivo)
 
@@ -194,9 +194,9 @@ def inserir_fila(cursor, id_arquivo):
 
             if not cursor.fetchone():
                 cursor.execute("""
-                    INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO)
-                    VALUES (?)
-                """, (id_idw,))
+                    INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+                    VALUES (?, ?)
+                """, (id_idw, "ALTERADOS"))
 
                 print("📄 IDW inserido na fila:", id_idw)
 
@@ -226,13 +226,10 @@ for root, dirs, files in os.walk(pasta_arq):
 
         nome_sem_ext = os.path.splitext(file)[0]
 
-        if padrao_desenho.search(nome_sem_ext):
-            classificacao = "ACABADO"
-        else:
-            classificacao = "MATERIA_PRIMA"
-
         caminho_original = os.path.join(root, file)
         caminho_certo = normalizar_caminho(caminho_original)
+
+        classificacao = definir_classificacao(caminho_original, nome_sem_ext)
 
         if not os.path.exists(caminho_original):
             print(f"❌ Caminho inválido: {caminho_original}")
@@ -242,8 +239,8 @@ for root, dirs, files in os.walk(pasta_arq):
 
         tamanho = stat.st_size
         data_mod = datetime.fromtimestamp(stat.st_mtime).replace(second=0, microsecond=0)
-        extensao = os.path.splitext(file)[1].lower()
-        tipo_arquivo = extensao.replace(".", "").upper()
+        extensaos = os.path.splitext(file)[1].lower()
+        tipo_arquivo = extensaos.replace(".", "").upper()
 
         arquivos_encontrados.add(caminho_certo)
 
@@ -254,10 +251,10 @@ for root, dirs, files in os.walk(pasta_arq):
 
             cursor.execute("""
             INSERT INTO arquivos
-            (arquivo, NOME_BASE, caminho, extensao, tipo_arquivo, classificacao, tamanho, data_mod)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (arquivo, NOME_BASE, caminho, tipo_arquivo, classificacao, tamanho, data_mod)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             RETURNING id
-            """, (file, nome_sem_ext, caminho_certo, extensao, tipo_arquivo, classificacao, tamanho, data_mod))
+            """, (file, nome_sem_ext, caminho_certo, tipo_arquivo, classificacao, tamanho, data_mod))
 
             id_arquivo = cursor.fetchone()[0]
 
@@ -281,10 +278,9 @@ for root, dirs, files in os.walk(pasta_arq):
                 SET data_mod = ?, 
                     tamanho = ?, 
                     classificacao = ?, 
-                    extensao = ?, 
                     tipo_arquivo = ?
                 WHERE id = ?
-                """, (data_mod, tamanho, classificacao, extensao, tipo_arquivo, id_arquivo))
+                """, (data_mod, tamanho, classificacao, tipo_arquivo, id_arquivo))
 
                 print("🔄 ALTERADO:", file)
 

@@ -1,9 +1,9 @@
 import sys
-from banco_dados.conexao import conecta
-from banco_dados.controle_erros import grava_erro_banco
-from comandos.conversores import valores_para_float
-from comandos.excel import carregar_workbook, edita_alinhamento, edita_bordas, edita_preenchimento
-from comandos.excel import edita_fonte, criar_workbook, letra_coluna, ajusta_larg_coluna
+from core.banco import conecta
+from core.erros import grava_erro_banco
+from core.conversores import valores_para_float
+from core.excel import carregar_workbook, edita_alinhamento, edita_bordas, edita_preenchimento
+from core.excel import edita_fonte, criar_workbook, letra_coluna, ajusta_larg_coluna
 from datetime import timedelta, date, datetime
 import inspect
 import os

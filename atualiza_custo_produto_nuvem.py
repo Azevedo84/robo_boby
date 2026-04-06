@@ -1,7 +1,7 @@
 import sys
-from banco_dados.conexao import conecta
-from banco_dados.conexao_nuvem import conectar_banco_nuvem
-from banco_dados.controle_erros import grava_erro_banco
+from core.banco import conecta
+from core.banco_nuvem import conectar_banco_nuvem
+from core.erros import grava_erro_banco
 import os
 import traceback
 import inspect

@@ -1,6 +1,6 @@
 import fdb
 import pandas as pd
-from comandos.conversores import valores_para_float
+from core.conversores import valores_para_float
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter

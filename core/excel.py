@@ -1,35 +1,8 @@
-import sys
-from banco_dados.controle_erros import grava_erro_banco
+from core.erros import trata_excecao
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl import Workbook, load_workbook, drawing
 from openpyxl.utils import get_column_letter
 import pandas as pd
-import os
-import inspect
-import traceback
-
-nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
-
-
-def trata_excecao(nome_funcao, mensagem, arquivo, excecao):
-    try:
-        tb = traceback.extract_tb(excecao)
-        num_linha_erro = tb[-1][1]
-
-        traceback.print_exc()
-        print(f'Houve um problema no arquivo: {arquivo} na função: "{nome_funcao}"\n{mensagem} {num_linha_erro}')
-
-        grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
-
-    except Exception as e:
-        nome_funcao_trat = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        tb = traceback.extract_tb(exc_traceback)
-        num_linha_erro = tb[-1][1]
-        print(f'Houve um problema no arquivo: {nome_arquivo} na função: "{nome_funcao_trat}"\n'
-              f'{e} {num_linha_erro}')
-        grava_erro_banco(nome_funcao_trat, e, nome_arquivo, num_linha_erro)
 
 
 def lanca_dados_mesclado(mp_copy, mesclado, celula, informacao, tam_fonte, negrito):
@@ -42,10 +15,8 @@ def lanca_dados_mesclado(mp_copy, mesclado, celula, informacao, tam_fonte, negri
         celula_sup_esq.value = informacao
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def lanca_dados_coluna(ws, celula, informacao, tam_fonte, negrito):
     try:
@@ -56,10 +27,8 @@ def lanca_dados_coluna(ws, celula, informacao, tam_fonte, negrito):
         celula_sup_esq.value = informacao
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def linhas_colunas_p_edicao(sheet, min_linha, max_linha, min_coluna, max_coluna):
     try:
@@ -71,10 +40,8 @@ def linhas_colunas_p_edicao(sheet, min_linha, max_linha, min_coluna, max_coluna)
                 yield cell
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def edita_alinhamento(cell, ali_horizontal='center', ali_vertical='center', rotacao=0, quebra_linha=False,
                       encolher=False, recuar=0):
@@ -87,10 +54,8 @@ def edita_alinhamento(cell, ali_horizontal='center', ali_vertical='center', rota
                                    indent=recuar)
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def edita_bordas(cell):
     try:
@@ -105,30 +70,24 @@ def edita_bordas(cell):
                              horizontal=Side(border_style='thin', color='00000000'))
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def edita_preenchimento(cell):
     try:
         cell.fill = PatternFill(start_color="C0C0C0", end_color="C0C0C0", fill_type="solid")
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def edita_fonte(cell, nome_fonte='Calibri', tamanho=10, negrito=False):
     try:
         cell.font = Font(name=nome_fonte, size=tamanho, bold=negrito)
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def carregar_workbook(caminho):
     try:
@@ -137,10 +96,8 @@ def carregar_workbook(caminho):
         return book
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def letra_coluna(coluna):
     try:
@@ -149,20 +106,16 @@ def letra_coluna(coluna):
         return column_letter
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def ajusta_larg_coluna(planilha, coluna, largura_ajustada):
     try:
         planilha.column_dimensions[get_column_letter(coluna[0].column)].width = largura_ajustada
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def criar_workbook():
     try:
@@ -171,10 +124,8 @@ def criar_workbook():
         return book
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def adiciona_imagem(ws, caminho_arquivo, celula):
     try:
@@ -182,10 +133,8 @@ def adiciona_imagem(ws, caminho_arquivo, celula):
         ws.add_image(img, celula)
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def dataframe_pandas(dados_lista, colunas):
     try:
@@ -194,10 +143,8 @@ def dataframe_pandas(dados_lista, colunas):
         return df
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def escritor_dataframe(caminho):
     try:
@@ -206,10 +153,8 @@ def escritor_dataframe(caminho):
         return writer
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-
+        trata_excecao(e)
+        raise
 
 def escritor_direto_dataframe(df, writer, nome_planilha, partida, ini_coluna, cabecalho, indice):
     try:
@@ -221,6 +166,5 @@ def escritor_direto_dataframe(df, writer, nome_planilha, partida, ini_coluna, ca
                     index=indice)
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        trata_excecao(e)
+        raise

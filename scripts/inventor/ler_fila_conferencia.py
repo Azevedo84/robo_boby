@@ -1,11 +1,9 @@
 import sys
-from banco_dados.controle_erros import grava_erro_banco
-import traceback
 import inspect
 import os
 import win32com.client
-from banco_dados.conexao import conecta_engenharia
-from comandos.inventor import padrao_desenho
+from core.banco import conecta_engenharia
+from core.inventor import definir_classificacao, normalizar_caminho
 from datetime import datetime
 from multiprocessing import Process, freeze_support
 import time
@@ -18,29 +16,9 @@ import smtplib
 
 class WorkerFilaConferencia:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.nome_arquivo = os.path.basename(__file__)
 
         self.manipula_comeco()
-
-    def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
-        try:
-            tb = traceback.extract_tb(excecao)
-            num_linha_erro = tb[-1][1]
-
-            traceback.print_exc()
-            print(f'Houve um problema no arquivo: {arquivo} na função: "{nome_funcao}"\n{mensagem} {num_linha_erro}')
-
-            grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
-
-        except Exception as e:
-            nome_funcao_trat = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            tb = traceback.extract_tb(exc_traceback)
-            num_linha_erro = tb[-1][1]
-            print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
-                  f'{e} {num_linha_erro}')
-            grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
 
     def dados_email(self):
         try:
@@ -109,6 +87,46 @@ class WorkerFilaConferencia:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
+    def enviar_email_erro_unicode(self, caminho, props, erro):
+        try:
+            saudacao, msg_final, to = self.dados_email()
+
+            subject = f'ERRO UTF-8 - {os.path.basename(caminho)}'
+
+            body = f"""{saudacao}
+
+            Foi detectado um erro de encoding ao processar um arquivo do Inventor.
+        
+            Arquivo:
+            {caminho}
+        
+            Erro:
+            {erro}
+        
+            Propriedades capturadas:
+            {props}
+        
+            {msg_final}
+            """
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+            server.sendmail(email_user, to, msg.as_string())
+            server.quit()
+
+            print("📧 Email enviado (erro UTF-8)")
+
+        except Exception as e:
+            nome_funcao = inspect.currentframe().f_code.co_name
+            exc_traceback = sys.exc_info()[2]
+            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
     def manipula_comeco(self):
         try:
             freeze_support()
@@ -125,42 +143,43 @@ class WorkerFilaConferencia:
             cursor = conecta_engenharia.cursor()
 
             cursor.execute("""
-                    SELECT ID_ARQUIVO
+                    SELECT ID_ARQUIVO, ORIGEM
                     FROM FILA_CONFERENCIA
                     ORDER BY ID
                 """)
 
-            fila = [row[0] for row in cursor.fetchall()]
+            fila = cursor.fetchall()
 
             print(f"\n📦 Total na fila: {len(fila)}")
 
-            for id_arquivo in fila:
+            if fila:
+                for id_arquivo, origem in fila:
 
-                print(f"\n🚀 Processando ID: {id_arquivo}")
+                    print(f"\n🚀 Processando ID: {id_arquivo}")
 
-                sucesso = self.processar_com_timeout(id_arquivo)
+                    sucesso = self.processar_com_timeout(id_arquivo, origem)
 
-                if sucesso:
-                    cursor.execute("""
-                            DELETE FROM FILA_CONFERENCIA
-                            WHERE ID_ARQUIVO=?
-                        """, (id_arquivo,))
-
-                    conecta_engenharia.commit()
-
-                    print(f"🗑️ Removido da fila: {id_arquivo}")
-
-                else:
-                    print(f"❌ Mantido na fila (erro): {id_arquivo}")
-                    cursor.execute("""
-                                SELECT ID, NOME_BASE, CAMINHO
-                                FROM ARQUIVOS
-                                WHERE ID = ?
+                    if sucesso:
+                        cursor.execute("""
+                                DELETE FROM FILA_CONFERENCIA
+                                WHERE ID_ARQUIVO=?
                             """, (id_arquivo,))
 
-                    idw_result = cursor.fetchall()
-                    desenho = idw_result[0][1]
-                    self.envia_email_desenho_sem_vinculo(idw_result, desenho)
+                        conecta_engenharia.commit()
+
+                        print(f"🗑️ Removido da fila: {id_arquivo}")
+
+                    else:
+                        print(f"❌ Mantido na fila (erro): {id_arquivo}")
+                        cursor.execute("""
+                                    SELECT ID, NOME_BASE, CAMINHO
+                                    FROM ARQUIVOS
+                                    WHERE ID = ?
+                                """, (id_arquivo,))
+
+                        idw_result = cursor.fetchall()
+                        desenho = idw_result[0][1]
+                        self.envia_email_desenho_sem_vinculo(idw_result, desenho)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -176,9 +195,9 @@ class WorkerFilaConferencia:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def processar_com_timeout(self, id_arquivo):
+    def processar_com_timeout(self, id_arquivo, origem):
         try:
-            p = Process(target=self.processar_arquivo_unitario, args=(id_arquivo,))
+            p = Process(target=self.processar_arquivo_unitario, args=(id_arquivo, origem))
             p.start()
 
             tempo_max = 60
@@ -212,7 +231,7 @@ class WorkerFilaConferencia:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def processar_arquivo_unitario(self, id_arquivo):
+    def processar_arquivo_unitario(self, id_arquivo, origem):
         import pythoncom
 
         pythoncom.CoInitialize()  # 🔥 ESSENCIAL
@@ -235,7 +254,7 @@ class WorkerFilaConferencia:
 
                 doc = inventor.Documents.Open(caminho, False)
 
-                self.processar_arquivo(cursor, id_arquivo, caminho, doc)
+                self.processar_arquivo(cursor, id_arquivo, caminho, doc, origem)
 
                 sucesso = True
 
@@ -283,21 +302,22 @@ class WorkerFilaConferencia:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def processar_arquivo(self, cursor, id_arquivo, caminho, doc):
+    def processar_arquivo(self, cursor, id_arquivo, caminho, doc, origem):
         try:
             print(f"\n📂 Processando: {caminho}")
 
             props = self.consulta_propriedades_inventor(doc)
 
-            ext = caminho.lower()
+            cursor.execute("""
+                SELECT TIPO_ARQUIVO FROM ARQUIVOS WHERE ID=?
+            """, (id_arquivo,))
+            tipo = cursor.fetchone()[0]
 
-            if ext.endswith(".iam"):
-                self.processar_iam(cursor, doc, id_arquivo, props)
-
-            elif ext.endswith(".ipt"):
+            if tipo == "IAM":
+                self.processar_iam(cursor, doc, id_arquivo, props, origem)
+            elif tipo == "IPT":
                 self.salvar_propriedades_ipt(cursor, id_arquivo, props)
-
-            elif ext.endswith(".idw"):
+            elif tipo == "IDW":
                 self.processar_idw(cursor, doc, id_arquivo)
 
         except Exception as e:
@@ -323,9 +343,9 @@ class WorkerFilaConferencia:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def processar_iam(self, cursor, doc, id_arquivo, props):
+    def processar_iam(self, cursor, doc, id_arquivo, props, origem):
         try:
-            estrutura_nova = self.consulta_estrutura_inventor(doc, cursor)
+            estrutura_nova = self.consulta_estrutura_inventor(doc, cursor, origem)
 
             total_itens = len(estrutura_nova)
 
@@ -338,13 +358,17 @@ class WorkerFilaConferencia:
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
 
-    def consulta_estrutura_inventor(self, doc, cursor):
+    def consulta_estrutura_inventor(self, doc, cursor, origem):
         try:
             comp = doc.ComponentDefinition
             bom = comp.BOM
 
-            bom.StructuredViewEnabled = True
-            bom.StructuredViewFirstLevelOnly = False
+            try:
+                bom.StructuredViewEnabled = True
+                bom.StructuredViewFirstLevelOnly = False
+            except:
+                print(f"⚠️ Sem BOM estruturada: {doc.FullFileName}")
+                return {}  # 🔥 AQUI é o comportamento correto
 
             view = None
             for v in bom.BOMViews:
@@ -354,7 +378,8 @@ class WorkerFilaConferencia:
             estrutura = {}
 
             if not view:
-                return estrutura
+                print(f"⚠️ BOM view não encontrada: {doc.FullFileName}")
+                return {}
 
             for row in view.BOMRows:
                 if row.ComponentDefinitions.Count == 0:
@@ -363,11 +388,16 @@ class WorkerFilaConferencia:
                 comp_def = row.ComponentDefinitions.Item(1)
                 caminho = comp_def.Document.FullFileName
 
+                if "\\publico\\c\\" not in caminho.lower():
+                    print("🚨 CAMINHO SUSPEITO:", caminho)
+                    continue
+
                 id_filho = self.consulta_e_cria_id_arquivo(cursor, caminho)
 
-                self.inserir_fila_conferencia(cursor, id_filho)
-
                 estrutura[id_filho] = float(row.ItemQuantity)
+
+                if origem != "ALTERADOS":
+                    self.inserir_fila_conferencia(cursor, id_filho)
 
             return estrutura
 
@@ -375,6 +405,8 @@ class WorkerFilaConferencia:
             nome_funcao = inspect.currentframe().f_code.co_name
             exc_traceback = sys.exc_info()[2]
             self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+
+            return {}  # 🔥 NUNCA retorna None
 
     def inserir_fila_conferencia(self, cursor, id_arquivo):
         try:
@@ -386,9 +418,9 @@ class WorkerFilaConferencia:
                 return
 
             cursor.execute("""
-                INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO)
-                VALUES (?)
-            """, (id_arquivo,))
+                INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+                VALUES (?, ?)
+            """, (id_arquivo, "PEDIDOS"))
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -398,7 +430,7 @@ class WorkerFilaConferencia:
     def consulta_e_cria_id_arquivo(self, cursor, caminho):
         try:
             caminho_original = caminho
-            caminho = caminho.lower()
+            caminho = normalizar_caminho(caminho_original)
 
             cursor.execute("""
                 SELECT ID FROM ARQUIVOS WHERE CAMINHO=?
@@ -412,28 +444,26 @@ class WorkerFilaConferencia:
             nome = os.path.basename(caminho_original)
             nome_sem_ext = os.path.splitext(nome)[0]
 
-            classificacao = "ACABADO" if padrao_desenho.search(nome_sem_ext) else "MATERIA_PRIMA"
-            dfgfd
+            classificacao = definir_classificacao(caminho_original, nome_sem_ext)
 
             stat = os.stat(caminho_original)
 
             tamanho = stat.st_size
             data_mod = datetime.fromtimestamp(stat.st_mtime)
 
-            extensao = os.path.splitext(nome)[1].lower()
-            tipo_arquivo = extensao.replace(".", "").upper()
+            extensaos = os.path.splitext(nome)[1].lower()
+            tipo_arquivo = extensaos.replace(".", "").upper()
 
             cursor.execute("""
                 INSERT INTO ARQUIVOS (
-                    ARQUIVO, NOME_BASE, EXTENSAO, TIPO_ARQUIVO,
+                    ARQUIVO, NOME_BASE, TIPO_ARQUIVO,
                     CLASSIFICACAO, CAMINHO, TAMANHO, DATA_MOD
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 RETURNING ID
             """, (
                 nome,
                 nome_sem_ext,
-                extensao,
                 tipo_arquivo,
                 classificacao,
                 caminho,
@@ -459,21 +489,40 @@ class WorkerFilaConferencia:
             dados = (
                 props.get("Revision Number"),
                 props.get("Part Number"),
+                props.get("Cost Center"),
                 props.get("Description"),
+                props.get("Material"),
+                props.get("Vendor"),
+                props.get("Authority"),
+                props.get("Comprimento"),  # 👈 nome exato do Inventor
             )
 
             if row:
                 cursor.execute("""
                     UPDATE PROPRIEDADES_IPT
-                    SET REVISION_NUMBER=?, PART_NUMBER=?, DESCRIPTION=?
+                    SET REVISION_NUMBER=?, 
+                    PART_NUMBER=?, 
+                    COST_CENTER=?, 
+                    DESCRIPTION=?, 
+                    MATERIAL=?, 
+                    VENDOR=?, 
+                    AUTHORITY=?,
+                    COMPRIMENTO=?
                     WHERE ID_ARQUIVO=?
                 """, (*dados, id_arquivo))
             else:
                 cursor.execute("""
                     INSERT INTO PROPRIEDADES_IPT
-                    (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, DESCRIPTION)
-                    VALUES (?, ?, ?, ?)
+                    (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, 
+                    DESCRIPTION, MATERIAL, VENDOR, AUTHORITY, COMPRIMENTO)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (id_arquivo, *dados))
+
+        except UnicodeEncodeError as e:
+            caminho = self.consulta_caminho_arquivo(cursor, id_arquivo)
+            print(f"🚨 ERRO UTF-8 no arquivo: {caminho}")
+            self.enviar_email_erro_unicode(caminho, props, str(e))
+            raise  # mantém comportamento atual (falha)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name
@@ -491,22 +540,38 @@ class WorkerFilaConferencia:
             dados = (
                 props.get("Revision Number"),
                 props.get("Part Number"),
+                props.get("Cost Center"),
                 props.get("Description"),
+                props.get("Material"),
+                props.get("Authority"),
                 total_itens
             )
 
             if row:
                 cursor.execute("""
                     UPDATE PROPRIEDADES_IAM
-                    SET REVISION_NUMBER=?, PART_NUMBER=?, DESCRIPTION=?, TOTAL_ITENS=?
+                    SET REVISION_NUMBER=?, 
+                    PART_NUMBER=?, 
+                    COST_CENTER=?, 
+                    DESCRIPTION=?, 
+                    MATERIAL=?, 
+                    AUTHORITY=?, 
+                    TOTAL_ITENS=?
                     WHERE ID_ARQUIVO=?
                 """, (*dados, id_arquivo))
             else:
                 cursor.execute("""
                     INSERT INTO PROPRIEDADES_IAM
-                    (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, DESCRIPTION, TOTAL_ITENS)
-                    VALUES (?, ?, ?, ?, ?)
+                    (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, 
+                    DESCRIPTION, MATERIAL, AUTHORITY, TOTAL_ITENS)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (id_arquivo, *dados))
+
+        except UnicodeEncodeError as e:
+            caminho = self.consulta_caminho_arquivo(cursor, id_arquivo)
+            print(f"🚨 ERRO UTF-8 no arquivo: {caminho}")
+            self.enviar_email_erro_unicode(caminho, props, str(e))
+            raise  # mantém comportamento atual (falha)
 
         except Exception as e:
             nome_funcao = inspect.currentframe().f_code.co_name

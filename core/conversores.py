@@ -1,33 +1,5 @@
-import sys
-from banco_dados.controle_erros import grava_erro_banco
-import os
-import inspect
+from core.erros import trata_excecao
 import locale
-import traceback
-
-nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
-
-
-def trata_excecao(nome_funcao, mensagem, arquivo, excecao):
-    try:
-        tb = traceback.extract_tb(excecao)
-        num_linha_erro = tb[-1][1]
-
-        traceback.print_exc()
-        print(f'Houve um problema no arquivo: {arquivo} na função: "{nome_funcao}"\n{mensagem} {num_linha_erro}')
-
-        grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
-
-    except Exception as e:
-        nome_funcao_trat = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        tb = traceback.extract_tb(exc_traceback)
-        num_linha_erro = tb[-1][1]
-        print(f'Houve um problema no arquivo: {nome_arquivo} na função: "{nome_funcao_trat}"\n'
-              f'{e} {num_linha_erro}')
-        grava_erro_banco(nome_funcao_trat, e, nome_arquivo, num_linha_erro)
-
 
 def valores_para_float(string):
     try:
@@ -54,17 +26,9 @@ def valores_para_float(string):
 
         return valor_float
 
-    except ValueError:
-        # Se a conversão falhar, retornar 0.00 e logar o erro
-        nome_funcao = inspect.currentframe().f_code.co_name
-        print(f"Valor inválido para conversão: {string}", nome_funcao, nome_arquivo)
-        return 0.00
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return 0.00
-
+        trata_excecao(e)
+        raise
 
 def valores_para_virgula(string):
     try:
@@ -86,11 +50,8 @@ def valores_para_virgula(string):
         return string_com_virgula
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return None
-
+        trata_excecao(e)
+        raise
 
 def float_para_moeda_reais(valor):
     try:
@@ -103,11 +64,8 @@ def float_para_moeda_reais(valor):
         return valor_final
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return None
-
+        trata_excecao(e)
+        raise
 
 def float_para_porcentagem(valor):
     try:
@@ -121,11 +79,8 @@ def float_para_porcentagem(valor):
         return valor_final
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return None
-
+        trata_excecao(e)
+        raise
 
 def moeda_reais_para_float(valor_moeda):
     try:
@@ -138,11 +93,8 @@ def moeda_reais_para_float(valor_moeda):
         return valor_float
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return None
-
+        trata_excecao(e)
+        raise
 
 def float_para_virgula(valor_float):
     try:
@@ -162,11 +114,8 @@ def float_para_virgula(valor_float):
         return string_com_virgula
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return None
-
+        trata_excecao(e)
+        raise
 
 def timestamp_brasileiro(data_e_tempo):
     try:
@@ -178,11 +127,8 @@ def timestamp_brasileiro(data_e_tempo):
         return data_formatada
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
-        return None
-
+        trata_excecao(e)
+        raise
 
 def data_banco_para_brasileiro(data_banco):
     try:
@@ -191,6 +137,5 @@ def data_banco_para_brasileiro(data_banco):
         return data_brasil
 
     except Exception as e:
-        nome_funcao = inspect.currentframe().f_code.co_name
-        exc_traceback = sys.exc_info()[2]
-        trata_excecao(nome_funcao, str(e), nome_arquivo, exc_traceback)
+        trata_excecao(e)
+        raise

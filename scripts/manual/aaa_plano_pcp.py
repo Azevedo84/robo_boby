@@ -1,10 +1,10 @@
 import sys
-from banco_dados.conexao import conecta, conecta_robo
-from banco_dados.controle_erros import grava_erro_banco
+from core.banco import conecta, conecta_robo
+from core.erros import grava_erro_banco
 import os
 import traceback
 import inspect
-from comandos.conversores import valores_para_float
+from core.conversores import valores_para_float
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -25,6 +25,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Side, Alignment, Border, Font
 import shutil
+from pathlib import Path
 
 
 class ExecutaPlanoPcp:
@@ -1270,8 +1271,13 @@ class ExecutaPlanoPcp:
             qtde_float = {'Qtde': float}
             df = df.astype(qtde_float)
 
-            caminho_arquivo_modelo= f'Mod_orcamento.xlsx'
-            nome_arquivo = f'Orçamento {num_sol}.xlsx'
+            # Caminho do arquivo atual
+            BASE_DIR = Path(__file__).resolve().parent
+            # Sobe níveis até a raiz do projeto (ajuste conforme necessário)
+            RAIZ_PROJETO = BASE_DIR.parent.parent.parent  # scripts/manual/ -> volta 3 níveis
+            # Caminho do Excel
+            caminho_arquivo_modelo = RAIZ_PROJETO / "files" / "excel" / "Mod_orcamento.xlsx"
+            nome_arquivo = f"Orçamento {num_sol}.xlsx"
 
             book = load_workbook(caminho_arquivo_modelo)
 

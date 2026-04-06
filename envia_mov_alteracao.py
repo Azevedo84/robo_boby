@@ -1,6 +1,6 @@
 import sys
-from banco_dados.conexao import conecta
-from banco_dados.controle_erros import grava_erro_banco
+from core.banco import conecta
+from core.erros import grava_erro_banco
 import pandas as pd
 from openpyxl import load_workbook, drawing
 from openpyxl.styles import Side, Alignment, Border, Font
