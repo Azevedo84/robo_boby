@@ -1,5 +1,6 @@
 import win32com.client
 
+#arquivo = r"\\PUBLICO\c\Inventor\71 - Seladora Grande\71.00.001.00 - CONJ SELADORA CAIXA\71.00.002.01 - CONJ BR SELA 1550\71.00.013.01\71.01.053.03.ipt"
 arquivo = r"\\PUBLICO\c\Inventor\71 - Seladora Grande\71.00.001.00 - CONJ SELADORA CAIXA\71.00.002.01 - CONJ BR SELA 1550\71.00.013.01\71.01.053.03.ipt"
 
 inventor = None

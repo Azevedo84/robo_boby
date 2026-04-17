@@ -4,11 +4,8 @@ from core.erros import grava_erro_banco
 import inspect
 import os
 import traceback
-
 from core.excel import edita_fonte, criar_workbook, edita_preenchimento, edita_alinhamento
 from core.excel import edita_bordas
-
-
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -16,13 +13,13 @@ from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime
-from dados_email import email_user, password
+from core.erros import trata_excecao
+from core.email_service import dados_email
 
 
 class DadosOrdensDeProducao:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         media_peca, media_conj_15, media_conj_mais = self.calculo_1_dados_ops_encerradas()
         self.calculo_2_dados_ops_abertas(media_peca, media_conj_15, media_conj_mais)
@@ -110,9 +107,8 @@ class DadosOrdensDeProducao:
 
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_2_dados_ops_abertas(self, media_peca, media_conj_15, media_conj_mais):
         try:
@@ -179,9 +175,8 @@ class DadosOrdensDeProducao:
             self.excel(lista_final)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def excel(self, tabela_final):
         try:
@@ -226,9 +221,8 @@ class DadosOrdensDeProducao:
                     self.excluir_arquivo(caminho)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def dados_email(self):
         try:
@@ -257,9 +251,8 @@ class DadosOrdensDeProducao:
             return saudacao, msg_final, to
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def excluir_arquivo(self, caminho_arquivo):
         try:
@@ -269,13 +262,12 @@ class DadosOrdensDeProducao:
                 print("O arquivo não existe no caminho especificado.")
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def envia_email(self, caminho, arquivo):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             to = ['<maquinas@unisold.com.br>']
 
@@ -317,9 +309,8 @@ class DadosOrdensDeProducao:
             print(f'Email com relátorio enviado com sucesso!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = DadosOrdensDeProducao()

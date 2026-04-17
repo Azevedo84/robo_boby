@@ -9,8 +9,7 @@ import inspect
 
 class VerificaPedidos:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.iniciar_processo()
 
@@ -106,9 +105,8 @@ class VerificaPedidos:
                                 print()
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
     def manipula_op_aberta(self, cod_prod):
@@ -136,9 +134,8 @@ class VerificaPedidos:
             return qtde_ops
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_dado_venda(self, cod_prod):
         try:
@@ -185,9 +182,8 @@ class VerificaPedidos:
             return qtde_venda
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_dado_consumo(self, cod_prod):
         try:
@@ -260,9 +256,8 @@ class VerificaPedidos:
             return qtde_consumo
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_dado_compra(self, cod_prod):
         try:
@@ -334,9 +329,8 @@ class VerificaPedidos:
             return qtde_compra
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = VerificaPedidos()

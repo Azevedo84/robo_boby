@@ -13,8 +13,7 @@ from openpyxl.styles import Border, Side
 
 class EnviaOrdensProducao:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
     def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
         try:
@@ -51,9 +50,8 @@ class EnviaOrdensProducao:
             return sel_estrutura
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def teste(self, id_mat_e, lista_substitutos, num_op):
@@ -109,9 +107,8 @@ class EnviaOrdensProducao:
             return lista_substitutos, saldo_substituto
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def consumo_op_por_id(self, num_op, id_materia_prima):
@@ -127,9 +124,8 @@ class EnviaOrdensProducao:
             return total_quantidade
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def verifica_ops_concluidas(self, num_op, id_estrut, cod_pai, descr_pai):
@@ -173,9 +169,8 @@ class EnviaOrdensProducao:
             return falta_material
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def gerar_excel(self, material_faltando):
@@ -223,9 +218,8 @@ class EnviaOrdensProducao:
             print(f'Dados salvos em {caminho}')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_comeco(self):
         try:
@@ -273,9 +267,8 @@ class EnviaOrdensProducao:
                 self.gerar_excel(nova_tudo)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def retorna_oc_abertas(self, cod_prod):
         try:
@@ -345,9 +338,8 @@ class EnviaOrdensProducao:
             return qtdes_oc
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def retorna_ops_abertas(self, cod_prod):
@@ -372,9 +364,8 @@ class EnviaOrdensProducao:
             return numeros_ops
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def retorna_materia_prima_industrializacao(self, cod_prod):
@@ -411,9 +402,8 @@ class EnviaOrdensProducao:
             return qtde_ops_ocs
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
 

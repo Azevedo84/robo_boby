@@ -10,8 +10,7 @@ import openpyxl
 
 class MaisUsados:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.consulta_mais_usados()
 
@@ -82,9 +81,8 @@ class MaisUsados:
             print(f"Arquivo salvo em: {arquivo_excel}")
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = MaisUsados()

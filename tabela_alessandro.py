@@ -17,13 +17,13 @@ from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
 from datetime import datetime
-from dados_email import email_user, password
+from core.erros import trata_excecao
+from core.email_service import dados_email
 
 
 class PcpPrevisao:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.calculo_1_dados_previsao()
 
@@ -114,9 +114,8 @@ class PcpPrevisao:
 
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_dados_pi(self):
         try:
@@ -144,9 +143,8 @@ class PcpPrevisao:
             return dados_p_tabela
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_3_verifica_estrutura(self, dados_total):
         try:
@@ -224,9 +222,8 @@ class PcpPrevisao:
             return []
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return []  # Retorne uma lista vazia em caso de exceção
 
     def excel(self, tabela_final):
@@ -293,9 +290,8 @@ class PcpPrevisao:
                     self.excluir_arquivo(caminho)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def dados_email(self):
         try:
@@ -324,9 +320,8 @@ class PcpPrevisao:
             return saudacao, msg_final, to
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def excluir_arquivo(self, caminho_arquivo):
         try:
@@ -336,13 +331,12 @@ class PcpPrevisao:
                 print("O arquivo não existe no caminho especificado.")
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def envia_email(self, caminho):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             to = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
 
@@ -384,9 +378,8 @@ class PcpPrevisao:
             print(f'Email com relátorio enviado com sucesso!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = PcpPrevisao()

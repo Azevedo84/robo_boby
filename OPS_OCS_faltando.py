@@ -9,13 +9,13 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
-from dados_email import email_user, password
+from core.erros import trata_excecao
+from core.email_service import dados_email
 
 
 class OPSeOCSFaltando:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.inicio_de_tudo()
 
@@ -71,9 +71,8 @@ class OPSeOCSFaltando:
             return nova_tabela
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def inicio_de_tudo(self):
@@ -241,9 +240,8 @@ class OPSeOCSFaltando:
                 self.envia_email_industrializado(lista_industrializacao)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def dados_email(self):
         try:
@@ -272,14 +270,13 @@ class OPSeOCSFaltando:
             return saudacao, msg_final, to
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def envia_email_acabado(self, lista_produtos):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             subject = f'PCP - Gerar OP dos produtos!'
 
@@ -312,13 +309,12 @@ class OPSeOCSFaltando:
             print(f'EMAIL ACABADO ENVIADO COM SUCESSO!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def envia_email_industrializado(self, lista_produtos):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             subject = f'PCP - Produtos para Industrializar!'
 
@@ -351,13 +347,12 @@ class OPSeOCSFaltando:
             print(f'EMAIL INDUSTRIALIZADO ENVIADO COM SUCESSO!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def envia_email_comprado(self, lista_produtos):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             subject = f'PCP - Produtos para Comprar!'
 
@@ -390,9 +385,8 @@ class OPSeOCSFaltando:
             print(f'EMAIL COMPRADO ENVIADO COM SUCESSO!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = OPSeOCSFaltando()

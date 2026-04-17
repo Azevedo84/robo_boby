@@ -1,12 +1,15 @@
 import os
 from datetime import datetime, timedelta
 from core.banco import conecta_engenharia
-from core.inventor import pasta_arq, ignorar_pastas, extensoes, padrao_desenho, normalizar_caminho, definir_classificacao
-from dados_email import email_user, password
+from core.inventor import pasta_arq, ignorar_pastas, extensoes, padrao_desenho, definir_classificacao
+from core.inventor import padronizar_caminho
+from core.email_service import dados_email
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
 
+
+destinatario = ['<maquinas@unisold.com.br>']
 
 cursor = conecta_engenharia.cursor()
 
@@ -20,7 +23,16 @@ FROM arquivos
 registros = cursor.fetchall()
 
 # dicionário para comparação rápida
-arquivos_banco = {r[1].lower(): (r[0], r[2]) for r in registros}
+arquivos_banco = {}
+
+for r in registros:
+    caminho = padronizar_caminho(r[1])
+
+    if not caminho:
+        print("🚨 CAMINHO INVÁLIDO NO BANCO:", r[1])
+        continue
+
+    arquivos_banco[caminho] = (r[0], r[2])
 
 arquivos_encontrados = set()
 
@@ -31,42 +43,11 @@ alterados = 0
 deletados = 0
 
 
-def dados_email():
-    try:
-        to = ['<maquinas@unisold.com.br>']
-
-        current_time = (datetime.now())
-        horario = current_time.strftime('%H')
-        hora_int = int(horario)
-        saudacao = ""
-        if 4 < hora_int < 13:
-            saudacao = "Bom Dia!"
-        elif 12 < hora_int < 19:
-            saudacao = "Boa Tarde!"
-        elif hora_int > 18:
-            saudacao = "Boa Noite!"
-        elif hora_int < 5:
-            saudacao = "Boa Noite!"
-
-        msg_final = ""
-
-        msg_final += f"Att,\n"
-        msg_final += f"Suzuki Máquinas Ltda\n"
-        msg_final += f"Fone (51) 3561.2583/(51) 3170.0965\n\n"
-        msg_final += f"🟦 Mensagem gerada automaticamente pelo sistema de Planejamento e Controle da Produção (PCP) do ERP Suzuki.\n"
-        msg_final += "🔸Por favor, não responda este e-mail diretamente."
-
-        return saudacao, msg_final, to
-
-    except Exception as e:
-        print(e)
-
-
 def envia_email_desenho_duplicado(texto, desenho):
     try:
-        saudacao, msg_final, to = dados_email()
+        saudacao, msg_final, email_user, password = dados_email()
 
-        subject = f'ENGENHARIA - DESENHO DUPLICADO {desenho}'
+        subject = f'ENGENHARIA VARREDURA - DESENHO DUPLICADO {desenho}'
 
         msg = MIMEMultipart()
         msg['From'] = email_user
@@ -85,48 +66,18 @@ def envia_email_desenho_duplicado(texto, desenho):
         server.starttls()
         server.login(email_user, password)
 
-        server.sendmail(email_user, to, text)
+        server.sendmail(email_user, destinatario, text)
         server.quit()
 
         print("email enviado DUPLICADO")
 
     except Exception as e:
         print(e)
-
-
-def envia_email_sem_idw(desenho):
-    try:
-        saudacao, msg_final, to = dados_email()
-
-        subject = f'ENGENHARIA - DESENHO {desenho} SEM IDW'
-
-        msg = MIMEMultipart()
-        msg['From'] = email_user
-        msg['Subject'] = subject
-
-        body = f"{saudacao}\n\nO desenho {desenho} está sem IDW!\n\n"
-        body += f"\n{msg_final}"
-
-        msg.attach(MIMEText(body, 'plain'))
-
-        text = msg.as_string()
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(email_user, password)
-
-        server.sendmail(email_user, to, text)
-        server.quit()
-
-        print("email enviado DUPLICADO")
-
-    except Exception as e:
-        print(e)
-
 
 # -------------------------
 # FUNÇÃO FILA
 # -------------------------
-def inserir_fila(cursor, id_arquivo):
+def inserir_fila_conferencia(cursor, id_arquivo):
     try:
         # 🔹 evita duplicado
         cursor.execute("""
@@ -168,7 +119,6 @@ def inserir_fila(cursor, id_arquivo):
         match = padrao_desenho.search(nome_base)
 
         if not match:
-            print(f"⚠️ Sem padrão de desenho: {nome_base}")
             return
 
         codigo = match.group()
@@ -177,9 +127,9 @@ def inserir_fila(cursor, id_arquivo):
         cursor.execute("""
             SELECT ID, TIPO_ARQUIVO, CAMINHO
             FROM ARQUIVOS
-            WHERE NOME_BASE CONTAINING ?
+            WHERE NOME_BASE LIKE ?
               AND TIPO_ARQUIVO = 'IDW'
-        """, (codigo,))
+        """, (f"%{codigo}",))
 
         resultados = cursor.fetchall()
 
@@ -204,10 +154,6 @@ def inserir_fila(cursor, id_arquivo):
             print(f"⚠️ IDW duplicado para código {codigo}")
             envia_email_desenho_duplicado(resultados, codigo)
 
-        else:
-            print(f"⚠️ Sem IDW para código {codigo}")
-            envia_email_sem_idw(codigo)
-
     except Exception as e:
         print("Erro ao inserir na fila:", e)
 
@@ -227,7 +173,11 @@ for root, dirs, files in os.walk(pasta_arq):
         nome_sem_ext = os.path.splitext(file)[0]
 
         caminho_original = os.path.join(root, file)
-        caminho_certo = normalizar_caminho(caminho_original)
+        caminho_certo = padronizar_caminho(caminho_original)
+
+        if not caminho_certo:
+            print("🚨 IGNORADO (SCAN):", caminho_original)
+            continue
 
         classificacao = definir_classificacao(caminho_original, nome_sem_ext)
 
@@ -260,7 +210,7 @@ for root, dirs, files in os.walk(pasta_arq):
 
             print("🆕 NOVO:", file)
 
-            inserir_fila(cursor, id_arquivo)
+            inserir_fila_conferencia(cursor, id_arquivo)
 
             novos += 1
 
@@ -284,7 +234,7 @@ for root, dirs, files in os.walk(pasta_arq):
 
                 print("🔄 ALTERADO:", file)
 
-                inserir_fila(cursor, id_arquivo)
+                inserir_fila_conferencia(cursor, id_arquivo)
 
                 alterados += 1
 
@@ -304,7 +254,11 @@ for caminho_banco, (id_arquivo, _) in arquivos_banco.items():
         cursor.execute("DELETE FROM propriedades_ipt WHERE id_arquivo = ?", (id_arquivo,))
         cursor.execute("DELETE FROM propriedades_iam WHERE id_arquivo = ?", (id_arquivo,))
         cursor.execute("DELETE FROM propriedades_idw WHERE id_arquivo = ?", (id_arquivo,))
+        cursor.execute("DELETE FROM COTAS_IDW WHERE id_arquivo = ?", (id_arquivo,))
+
         cursor.execute("DELETE FROM FILA_CONFERENCIA WHERE id_arquivo = ?", (id_arquivo,))
+        cursor.execute("DELETE FROM FILA_LANCA_PROPRIEDADE WHERE id_arquivo = ?", (id_arquivo,))
+        cursor.execute("DELETE FROM FILA_GERAR_PDF WHERE id_arquivo = ?", (id_arquivo,))
 
         # 3. remove arquivo
         cursor.execute("DELETE FROM arquivos WHERE id = ?", (id_arquivo,))

@@ -2,6 +2,7 @@ import win32com.client
 import os
 import time
 
+#idw = r"\\Publico\c\Inventor\1 - Folha A4\Cód. 21 - Ponto de Bobina\21.01.03.00 - Conj. Ponto Bob Rol\01 - 21.01.03.01.idw"
 idw = r"\\Publico\c\Inventor\1 - Folha A4\Cód. 21 - Ponto de Bobina\21.01.03.00 - Conj. Ponto Bob Rol\01 - 21.01.03.01.idw"
 
 desktop = os.path.join(os.path.expanduser("~"), "Desktop")

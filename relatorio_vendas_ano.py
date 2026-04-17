@@ -10,8 +10,7 @@ from openpyxl import Workbook
 
 class ExecutaVendas:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.resultado_ops_vinculos = {}
         self.resultado_sol_vinculos = {}
@@ -97,9 +96,8 @@ class ExecutaVendas:
                 print(f"Excel criado em: {caminho_arquivo}")
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = ExecutaVendas()

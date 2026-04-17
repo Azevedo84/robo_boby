@@ -11,8 +11,7 @@ import traceback
 
 class TelaPcpPrevisaoV2:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.line_SemanCompra = "1"
 
@@ -83,9 +82,8 @@ class TelaPcpPrevisaoV2:
             return tab_meses
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def retorna_oc_abertas(self, cod_prod):
@@ -153,9 +151,8 @@ class TelaPcpPrevisaoV2:
             return qtdes_oc
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def retorna_ops_saldo_ops_abertas(self, cod_pai, cod_filho):
@@ -221,9 +218,8 @@ class TelaPcpPrevisaoV2:
             return qtde_ops
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def manipula_ordens_compra(self, dados_total):
@@ -252,9 +248,8 @@ class TelaPcpPrevisaoV2:
             return lista_ocs, qtde_float_com_oc
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def manipula_ordens_producao(self, dados_total):
@@ -286,9 +281,8 @@ class TelaPcpPrevisaoV2:
             return lista_ops, qtde_float_op
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def definir_folgas(self, data_inicio, data_fim):
@@ -308,9 +302,8 @@ class TelaPcpPrevisaoV2:
             return contagem_sabados, contagem_domingos
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def retorna_data_entrega(self, id_pais):
@@ -345,9 +338,8 @@ class TelaPcpPrevisaoV2:
             return entrega, fornecedor
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def manipula_dados_tabela_producao(self, cod_prod):
@@ -373,9 +365,8 @@ class TelaPcpPrevisaoV2:
             return dados_ops
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def manipula_dados_pi(self):
@@ -417,9 +408,8 @@ class TelaPcpPrevisaoV2:
                 self.dados_pi = tabela_final
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def definir_data_inicio(self):
         try:
@@ -435,9 +425,8 @@ class TelaPcpPrevisaoV2:
             self.data_inicio = data_ini
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_1_chamar_funcao(self):
         try:
@@ -451,9 +440,8 @@ class TelaPcpPrevisaoV2:
                 self.calculo_2_dados_previsao()
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_2_dados_previsao(self):
         try:
@@ -502,9 +490,8 @@ class TelaPcpPrevisaoV2:
                 print(f'Este Plano de produção está concluído!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_3_verifica_estrutura(self, dados_total):
         try:
@@ -598,9 +585,8 @@ class TelaPcpPrevisaoV2:
             return filhos
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def calculo_4_final_lanca_tabelas(self, estrutura_final):
@@ -630,9 +616,8 @@ class TelaPcpPrevisaoV2:
             self.calculo_5_recebe_dados(lista_com_tempos)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_5_recebe_dados(self, estrutura_ord):
         try:
@@ -737,9 +722,8 @@ class TelaPcpPrevisaoV2:
             self.calculo_6_manipula_final_tab(tabela_pra_tabela)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_6_manipula_final_tab(self, lista_final):
         try:
@@ -781,9 +765,8 @@ class TelaPcpPrevisaoV2:
                 self.dados_previsao = tabela_nova
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_7_manipula_previsao_pi(self, dados_previsao):
         try:
@@ -822,9 +805,8 @@ class TelaPcpPrevisaoV2:
                 self.calculo_8_manipula_previsao_pi2(dados_pi, nova_lista)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_8_manipula_previsao_pi2(self, dados_pi, nova_lista):
         try:
@@ -863,9 +845,8 @@ class TelaPcpPrevisaoV2:
                     self.dados_pi = tab_ordenada
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def excel(self):
         try:
@@ -1018,9 +999,8 @@ class TelaPcpPrevisaoV2:
             self.excel2(nova_lista_produtos, produtos_sem_ops)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def select_mistura(self, num_op, id_estrut):
         try:
@@ -1076,9 +1056,8 @@ class TelaPcpPrevisaoV2:
             return dados_tabela_estrut, dados_tabela_consumo
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def separar_dados_select(self, produtos_por_servico):
@@ -1112,9 +1091,8 @@ class TelaPcpPrevisaoV2:
             return produtos_filtrados, produtos_sem_op
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def excel2(self, produtos_por_servico, produtos_sem_ops):
@@ -1251,9 +1229,8 @@ class TelaPcpPrevisaoV2:
             wb.save(caminho_arquivo)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 tela = TelaPcpPrevisaoV2()

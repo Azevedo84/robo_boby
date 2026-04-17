@@ -9,13 +9,13 @@ from datetime import datetime, date, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
-from dados_email import email_user, password
+from core.erros import trata_excecao
+from core.email_service import dados_email
 
 
 class VencimentoPI:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         dados_vence, dados_vencidos = self.inicio_de_tudo()
 
@@ -73,13 +73,12 @@ class VencimentoPI:
             return saudacao, msg_final, to
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def envia_email_vencendo(self, lista_produtos):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             subject = f'PI - Pedido Interno com Prazo Vencendo!'
 
@@ -113,13 +112,12 @@ class VencimentoPI:
             print(f'EMAIL PEDIDOS VENCENDO ENVIADO COM SUCESSO!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def envia_email_vencido(self, lista_produtos):
         try:
-            saudacao, msg_final, to = self.dados_email()
+            saudacao, msg_final, email_user, password = dados_email()
 
             subject = f'PI - Pedido Interno com Prazo Vencido!'
 
@@ -153,9 +151,8 @@ class VencimentoPI:
             print(f'EMAIL PEDIDOS VENCIDOS ENVIADO COM SUCESSO!')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def inicio_de_tudo(self):
         try:
@@ -191,9 +188,8 @@ class VencimentoPI:
             return lista_vencendo, lista_vencido
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = VencimentoPI()

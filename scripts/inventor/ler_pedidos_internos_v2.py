@@ -1,21 +1,27 @@
 from core.erros import trata_excecao
-from core.email_service import envia_email_desenho_duplicado, envia_email_desenho_sem_vinculo, envia_email_sem_idw, envia_email_arquivo_nao_encontrado
+from core.email_service import envia_email_desenho_duplicado, envia_email_desenho_sem_vinculo
+from core.email_service import envia_email_sem_idw, envia_email_arquivo_nao_encontrado
+from core.email_service import dados_email
 import os
 import win32com.client
 from core.banco import conecta, conecta_engenharia
-from core.inventor import normalizar_caminho, definir_classificacao
+from core.inventor import definir_classificacao
+from core.inventor import padronizar_caminho
 from datetime import datetime
 import re
 from multiprocessing import Process, freeze_support
 import time
 from typing import cast, Any
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
 
 
 class LerPedidosInternos:
     def __init__(self):
-        self.manipula_comeco()
-
         self.destinatario = ['<maquinas@unisold.com.br>']
+
+        self.manipula_comeco()
 
     def buscar_idw_por_referencia(self, cursor, ref):
         try:
@@ -46,6 +52,38 @@ class LerPedidosInternos:
                 return resultados
 
             return []
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def envia_email_muitos_caracteres(self, desenho, campos):
+        try:
+            saudacao, msg_final, email_user, password = dados_email()
+
+            subject = f'ENGENHARIA (FILA) - CAMPOS COM MAIS DE 100 CARACTERES {desenho}'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nO desenho {desenho} tem campos com muitos caracteres!\n\n"
+
+            for i in campos:
+                body += f"{i}\n\n"
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, self.destinatario, text)
+            server.quit()
+
+            print("email enviado MUITOS CARACTERES")
 
         except Exception as e:
             trata_excecao(e)
@@ -94,42 +132,53 @@ class LerPedidosInternos:
             trata_excecao(e)
             raise
 
-    def salvar_propriedades_iam(self, cursor, id_arquivo, props, total_itens):
+    def salvar_propriedades_iam(self, cursor, id_arquivo, props_iam):
         try:
             cursor.execute("""
-                SELECT ID FROM PROPRIEDADES_IAM WHERE ID_ARQUIVO=?
-            """, (id_arquivo,))
+                            SELECT ID FROM PROPRIEDADES_IAM WHERE ID_ARQUIVO=?
+                        """, (id_arquivo,))
 
             row = cursor.fetchone()
 
-            dados = (
-                props.get("Revision Number"),
-                props.get("Part Number"),
-                props.get("Cost Center"),
-                props.get("Description"),
-                props.get("Material"),
-                props.get("Authority"),
-                total_itens
-            )
-
             if row:
                 cursor.execute("""
-                    UPDATE PROPRIEDADES_IAM
-                    SET REVISION_NUMBER=?,
-                        PART_NUMBER=?,
-                        COST_CENTER=?,
-                        DESCRIPTION=?,
-                        MATERIAL=?,
-                        AUTHORITY=?,
-                        TOTAL_ITENS=?
-                    WHERE ID_ARQUIVO=?
-                """, (*dados, id_arquivo))
+                                UPDATE PROPRIEDADES_IAM
+                                SET REVISION_NUMBER=?, 
+                                PART_NUMBER=?, 
+                                COST_CENTER=?, 
+                                DESCRIPTION=?, 
+                                MATERIAL=?, 
+                                AUTHORITY=?, 
+                                ENGINEER=?, 
+                                TOTAL_ITENS=?
+                                WHERE ID_ARQUIVO=?
+                            """, (
+                    props_iam["revision_number"],
+                    props_iam["part_number"],
+                    props_iam["cost_center"],
+                    props_iam["description"],
+                    props_iam["material"],
+                    props_iam["authority"],
+                    props_iam["engineer"],
+                    props_iam["total_itens"],
+                    id_arquivo
+                ))
             else:
                 cursor.execute("""
-                    INSERT INTO PROPRIEDADES_IAM
-                    (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, DESCRIPTION, MATERIAL, AUTHORITY, TOTAL_ITENS)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (id_arquivo, *dados))
+                                INSERT INTO PROPRIEDADES_IAM
+                                (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, 
+                                DESCRIPTION, MATERIAL, AUTHORITY, ENGINEER, TOTAL_ITENS)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (id_arquivo,
+                                  props_iam["revision_number"],
+                                  props_iam["part_number"],
+                                  props_iam["cost_center"],
+                                  props_iam["description"],
+                                  props_iam["material"],
+                                  props_iam["authority"],
+                                  props_iam["engineer"],
+                                  props_iam["total_itens"],
+                                  ))
 
         except Exception as e:
             trata_excecao(e)
@@ -157,11 +206,8 @@ class LerPedidosInternos:
 
     def consulta_e_cria_id_arquivo(self, cursor, caminho):
         try:
-            caminho_original = caminho
-            caminho = normalizar_caminho(caminho_original)  # 👈 CORRETO
-
             cursor.execute("""
-                SELECT ID FROM ARQUIVOS WHERE CAMINHO=?
+                SELECT ID FROM ARQUIVOS WHERE LOWER(CAMINHO)=?
             """, (caminho,))
 
             row = cursor.fetchone()
@@ -170,13 +216,13 @@ class LerPedidosInternos:
                 return row[0]
 
             # 🔹 dados do arquivo (teu padrão)
-            nome: str = os.path.basename(caminho_original)
+            nome: str = os.path.basename(caminho)
             nome_sem_ext = os.path.splitext(nome)[0]
 
             classificacao = definir_classificacao(caminho, nome_sem_ext)
 
             try:
-                stat = os.stat(caminho_original)
+                stat = os.stat(caminho)
             except FileNotFoundError:
                 raise Exception(f"Arquivo não existe fisicamente: {caminho}")
 
@@ -275,44 +321,56 @@ class LerPedidosInternos:
             trata_excecao(e)
             raise
 
-    def salvar_propriedades_ipt(self, cursor, id_arquivo, props):
+    def salvar_propriedades_ipt(self, cursor, id_arquivo, props_ipt):
         try:
             cursor.execute("""
-                SELECT ID FROM PROPRIEDADES_IPT WHERE ID_ARQUIVO=?
-            """, (id_arquivo,))
+                            SELECT ID FROM PROPRIEDADES_IPT WHERE ID_ARQUIVO=?
+                        """, (id_arquivo,))
 
             row = cursor.fetchone()
 
-            dados = (
-                props.get("Revision Number"),
-                props.get("Part Number"),
-                props.get("Cost Center"),
-                props.get("Description"),
-                props.get("Material"),
-                props.get("Vendor"),
-                props.get("Authority"),
-                props.get("Comprimento"),  # 👈 nome exato do Inventor
-            )
-
             if row:
                 cursor.execute("""
-                    UPDATE PROPRIEDADES_IPT
-                    SET REVISION_NUMBER=?,
-                        PART_NUMBER=?,
-                        COST_CENTER=?,
-                        DESCRIPTION=?,
-                        MATERIAL=?,
-                        VENDOR=?,
-                        AUTHORITY=?,
-                        COMPRIMENTO=?
-                    WHERE ID_ARQUIVO=?
-                """, (*dados, id_arquivo))
+                                UPDATE PROPRIEDADES_IPT
+                                SET REVISION_NUMBER=?, 
+                                PART_NUMBER=?, 
+                                COST_CENTER=?, 
+                                DESCRIPTION=?, 
+                                MATERIAL=?, 
+                                VENDOR=?, 
+                                AUTHORITY=?,
+                                ENGINEER=?,
+                                COMPRIMENTO=?
+                                WHERE ID_ARQUIVO=?
+                            """, (
+                    props_ipt["revision_number"],
+                    props_ipt["part_number"],
+                    props_ipt["cost_center"],
+                    props_ipt["description"],
+                    props_ipt["material"],
+                    props_ipt["vendor"],
+                    props_ipt["authority"],
+                    props_ipt["engineer"],
+                    props_ipt["comprimento"],
+                    id_arquivo
+                ))
             else:
                 cursor.execute("""
-                    INSERT INTO PROPRIEDADES_IPT
-                    (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, DESCRIPTION, MATERIAL, VENDOR, AUTHORITY, COMPRIMENTO)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (id_arquivo, *dados))
+                                INSERT INTO PROPRIEDADES_IPT
+                                (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, 
+                                DESCRIPTION, MATERIAL, VENDOR, AUTHORITY, ENGINEER, COMPRIMENTO)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (id_arquivo,
+                                  props_ipt["revision_number"],
+                                  props_ipt["part_number"],
+                                  props_ipt["cost_center"],
+                                  props_ipt["description"],
+                                  props_ipt["material"],
+                                  props_ipt["vendor"],
+                                  props_ipt["authority"],
+                                  props_ipt["engineer"],
+                                  props_ipt["comprimento"]
+                                  ))
 
         except Exception as e:
             trata_excecao(e)
@@ -359,6 +417,12 @@ class LerPedidosInternos:
                     continue
 
                 id_arquivo, tipo, caminho = resultados[0]
+
+                caminho = padronizar_caminho(caminho)
+
+                if not caminho:
+                    print("🚨 CAMINHO INVÁLIDO (PEDIDOS)")
+                    continue
 
                 # 🔹 verifica se IPT/IAM já processado
                 if tipo == "IPT":
@@ -580,10 +644,68 @@ class LerPedidosInternos:
 
             if tipo == "IAM":
                 print("👉 Tipo: IAM")
-                self.processar_iam(cursor, doc, id_arquivo, props)
+                dados_iam = {
+                    "revision_number": props.get("Revision Number"),
+                    "part_number": props.get("Part Number"),
+                    "cost_center": props.get("Cost Center"),
+                    "description": props.get("Description"),
+                    "material": props.get("Material"),
+                    "authority": props.get("Authority"),
+                    "engineer": props.get("Engineer")
+                }
+
+                erros = []
+
+                for campo, valor in dados_iam.items():
+                    if valor is not None and len(str(valor)) > 100:
+                        erros.append((campo, valor))
+
+                if erros:
+                    msg = []
+                    for campo, valor in erros:
+                        dadinhos = f" - {campo}: {len(str(valor))} caracteres"
+                        msg.append(dadinhos)
+
+                    nome_arquivo = os.path.basename(caminho)
+
+                    self.envia_email_muitos_caracteres(nome_arquivo, msg)
+
+                    return None
+
+                self.processar_iam(cursor, doc, id_arquivo, dados_iam)
             elif tipo == "IPT":
                 print("👉 Tipo: IPT")
-                self.salvar_propriedades_ipt(cursor, id_arquivo, props)
+
+                dados_ipt = {
+                    "revision_number": props.get("Revision Number"),
+                    "part_number": props.get("Part Number"),
+                    "cost_center": props.get("Cost Center"),
+                    "description": props.get("Description"),
+                    "material": props.get("Material"),
+                    "vendor": props.get("Vendor"),
+                    "authority": props.get("Authority"),
+                    "engineer": props.get("Engineer"),
+                    "comprimento": props.get("Comprimento")
+                }
+
+                erros = []
+
+                for campo, valor in dados_ipt.items():
+                    if valor is not None and len(str(valor)) > 100:
+                        erros.append((campo, valor))
+
+                if erros:
+                    msg = []
+                    for campo, valor in erros:
+                        dadinhos = f" - {campo}: {len(str(valor))} caracteres"
+                        msg.append(dadinhos)
+
+                    nome_arquivo = os.path.basename(caminho)
+
+                    self.envia_email_muitos_caracteres(nome_arquivo, msg)
+
+                    return None
+                self.salvar_propriedades_ipt(cursor, id_arquivo, dados_ipt)
             elif tipo == "IDW":
                 print("👉 Tipo: IDW")
                 self.processar_idw(cursor, doc, id_arquivo, caminho)
@@ -592,13 +714,14 @@ class LerPedidosInternos:
             trata_excecao(e)
             raise
 
-    def processar_iam(self, cursor, doc, id_arquivo, props):
+    def processar_iam(self, cursor, doc, id_arquivo, props_iam):
         try:
             estrutura_nova = self.consulta_estrutura_inventor(doc, cursor)
 
             total_itens = len(estrutura_nova)
+            props_iam["total_itens"] = total_itens
 
-            self.salvar_propriedades_iam(cursor, id_arquivo, props, total_itens)
+            self.salvar_propriedades_iam(cursor, id_arquivo, props_iam)
 
             inseridos, atualizados, deletados = self.sincronizar_estrutura(cursor, id_arquivo, estrutura_nova)
 
@@ -639,23 +762,26 @@ class LerPedidosInternos:
                 comp_def = row.ComponentDefinitions.Item(1)
                 caminho = comp_def.Document.FullFileName
 
-                if "\\publico\\c\\" not in caminho.lower():
-                    trata_excecao(Exception(f"Caminho suspeito: {caminho}"))
-                else:
-                    id_filho = self.consulta_e_cria_id_arquivo(cursor, caminho)
+                caminho = padronizar_caminho(caminho)
 
-                    if not id_filho:
-                        envia_email_arquivo_nao_encontrado(self.destinatario, caminho)
-                        raise Exception(f"Arquivo não cadastrado: {caminho}")
+                if not caminho:
+                    print("🚨 CAMINHO INVÁLIDO")
+                    continue
 
-                    self.inserir_fila_conferencia(cursor, id_filho)
+                id_filho = self.consulta_e_cria_id_arquivo(cursor, caminho)
 
-                    try:
-                        quantidade = float(row.ItemQuantity)
-                    except (TypeError, ValueError):
-                        quantidade = 0.0
+                if not id_filho:
+                    envia_email_arquivo_nao_encontrado(self.destinatario, caminho)
+                    raise Exception(f"Arquivo não cadastrado: {caminho}")
 
-                    estrutura[id_filho] = quantidade
+                self.inserir_fila_conferencia(cursor, id_filho)
+
+                try:
+                    quantidade = float(row.ItemQuantity)
+                except (TypeError, ValueError):
+                    quantidade = 0.0
+
+                estrutura[id_filho] = quantidade
 
             return estrutura
 

@@ -1,5 +1,6 @@
 import win32com.client
 
+#arquivo = r"\\PUBLICO\Inventor\18 - Extrusora Continua\18.00.001.iam"
 arquivo = r"\\PUBLICO\Inventor\18 - Extrusora Continua\18.00.001.iam"
 
 inventor = None

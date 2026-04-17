@@ -1,9 +1,7 @@
 import win32com.client
 
-#arquivo = r"\\Publico\C\Inventor\21 - Ponto Bobina\21.01.03.01.ipt"
-#arquivo = r"\\Publico\C\Inventor\21 - Ponto Bobina\21.01.03.00.iam"
-#arquivo = r"\\Publico\C\Inventor\1 - Folha A4\Cód. 21 - Ponto de Bobina\21.01.03.00 - Conj. Ponto Bob Rol\01 - 21.01.03.01.idw"
-arquivo = r"\\Publico\C\Inventor\Biblioteca\Molas\MC13X10X29\MC13X10X29.ipt"
+#arquivo = r"\\publico\c\inventor\24 - corte e solda\24.00.001 - corte e solda\24.00.019.01\24.01.053.05.ipt"
+arquivo = r"\\publico\c\inventor\1 - folha a4\cód. 24 - corte e solda\24.00.001\24.00.019.01\24.01.053.05.idw"
 
 inventor = None
 doc = None
@@ -56,6 +54,7 @@ try:
 
         print("\nTOTAL ITENS NA ESTRUTURA:", quantidade_itens)
 
+    # 🔥 AQUI É O QUE TU QUER
     if arquivo.lower().endswith(".idw"):
 
         print("\nARQUIVOS REFERENCIADOS:")
@@ -63,6 +62,59 @@ try:
 
         for ref in doc.ReferencedDocuments:
             print(ref.FullFileName)
+
+        # 🔥 NOVO: pegar documento referenciado (.ipt)
+        ref_doc = None
+        try:
+            ref_doc = doc.ReferencedDocuments[0]
+        except:
+            pass
+
+        # 🔥 NOVO: listar parâmetros do modelo
+        if ref_doc:
+            print("\nPARAMETROS DO MODELO (.ipt):")
+            print("--------------------------------")
+
+            try:
+                params = ref_doc.ComponentDefinition.Parameters
+
+                for p in params:
+                    try:
+                        valor_mm = round(p.Value * 10, 2)
+                        print(f"{p.Name}: {valor_mm} mm")
+                    except:
+                        print(f"{p.Name}: (sem valor)")
+            except:
+                print("Não conseguiu acessar parâmetros")
+
+        # 🔹 COTAS DO DESENHO
+        print("\nCOTAS DO DESENHO:")
+        print("--------------------------------")
+
+        for sheet in doc.Sheets:
+            print(f"\nSHEET: {sheet.Name}")
+
+            for dim in sheet.DrawingDimensions:
+
+                try:
+                    texto = dim.Text.Text
+                except:
+                    texto = "(sem texto)"
+
+                try:
+                    valor = dim.ModelValue  # cm
+                    valor_mm = round((valor * 10), 2)
+                except:
+                    valor_mm = "(sem valor)"
+
+                # 🔥 NOVO: pegar parâmetro da cota
+                try:
+                    param = dim.Parameter
+                    nome_param = param.Name
+                except:
+                    nome_param = "SEM_PARAM"
+
+                print(f"Param: {nome_param} | Texto: {texto} | Valor (mm): {valor_mm}")
 
 except Exception as e:
     print("ERRO:", e)

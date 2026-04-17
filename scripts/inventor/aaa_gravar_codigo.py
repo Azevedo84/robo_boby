@@ -1,6 +1,7 @@
 import win32com.client
 
 arquivo_conj = r"\\Publico\c\Inventor\21 - Ponto Bobina\21.01.03.00.iam"
+#arquivo_conj = r"\\Publico\c\Inventor\21 - Ponto Bobina\21.01.03.00.iam"
 arquivo_peca = r"\\Publico\c\Inventor\21 - Ponto Bobina\21.01.03.01.ipt"
 
 inventor = win32com.client.Dispatch("Inventor.Application")

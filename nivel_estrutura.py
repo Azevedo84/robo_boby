@@ -12,8 +12,7 @@ import pandas as pd
 
 class PcpPrevisao:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         data_inicio = date.today() + timedelta(1)
         dia_da_semana = data_inicio.weekday()
@@ -85,9 +84,8 @@ class PcpPrevisao:
             return tab_meses
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def definir_folgas(self, data_inicio, data_fim):
         try:
@@ -106,9 +104,8 @@ class PcpPrevisao:
             return contagem_sabados, contagem_domingos
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def retorna_data_entrega(self, id_pais):
         try:
@@ -142,9 +139,8 @@ class PcpPrevisao:
             return entrega, fornecedor
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_dados_tabela_producao(self, cod_prod):
         try:
@@ -169,9 +165,8 @@ class PcpPrevisao:
             return dados_ops
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def manipula_dados_pi(self):
         try:
@@ -209,9 +204,8 @@ class PcpPrevisao:
             return tabela_final
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_1_dados_previsao(self):
         try:
@@ -227,9 +221,8 @@ class PcpPrevisao:
                     print(i)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def calculo_3_verifica_estrutura(self, nivel, codigo, quantidade):
         try:
@@ -268,9 +261,8 @@ class PcpPrevisao:
             return filhos
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def exportar_para_excel(self, estrutura):
         try:
@@ -299,9 +291,8 @@ class PcpPrevisao:
             novo_df.to_excel(caminho, index=False)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = PcpPrevisao()

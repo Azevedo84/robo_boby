@@ -15,8 +15,7 @@ from openpyxl.styles import Border, Side
 
 class OrdensAbertas:
     def __init__(self):
-        nome_arquivo_com_caminho = inspect.getframeinfo(inspect.currentframe()).filename
-        self.nome_arquivo = os.path.basename(nome_arquivo_com_caminho)
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.consulta_ops()
 
@@ -68,9 +67,8 @@ class OrdensAbertas:
                 self.gerar_excel(tudo_tudo)
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
     def verifica_ops_concluidas(self, num_op, id_estrut, cod_pai, descr_pai):
         try:
@@ -104,9 +102,8 @@ class OrdensAbertas:
             return falta_material
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def estrutura_prod_qtde_op(self, num_op, id_estrut):
@@ -125,9 +122,8 @@ class OrdensAbertas:
             return sel_estrutura
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def consumo_op_por_id(self, num_op, id_materia_prima):
@@ -143,9 +139,8 @@ class OrdensAbertas:
             return total_quantidade
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def teste(self, id_mat_e, lista_substitutos, num_op):
@@ -201,9 +196,8 @@ class OrdensAbertas:
             return lista_substitutos, saldo_substituto
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
             return None
 
     def gerar_excel(self, material_faltando):
@@ -248,9 +242,8 @@ class OrdensAbertas:
             print(f'Dados salvos em {caminho}')
 
         except Exception as e:
-            nome_funcao = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            self.trata_excecao(nome_funcao, str(e), self.nome_arquivo, exc_traceback)
+            trata_excecao(e)
+            raise
 
 
 chama_classe = OrdensAbertas()
