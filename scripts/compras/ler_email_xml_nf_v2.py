@@ -1,8 +1,18 @@
+import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
 from core.banco import conecta
 from core.erros import trata_excecao
 from core.email_service import dados_email
 from core.conversores import valores_para_float
-import os
 import xml.etree.ElementTree as ET # noqa
 import re
 from datetime import datetime
@@ -593,9 +603,16 @@ class ConferenciaXmlNf:
             dados_fornecedor = cursor.fetchall()
 
             if len(dados_fornecedor) > 1:
-                forn_duplicado = True
+                if cnpj_fornecedor == "74140450000205":
+                    cursor = conecta.cursor()
+                    cursor.execute(f"SELECT id, data_criacao, registro, razao, cnpj "
+                                   f"FROM fornecedores "
+                                   f"WHERE id = {7134};")
+                    dados_fornecedor = cursor.fetchall()
+                else:
+                    forn_duplicado = True
 
-                dados_fornecedor = []
+                    dados_fornecedor = []
 
             return dados_fornecedor, forn_duplicado
 

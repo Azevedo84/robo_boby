@@ -1,6 +1,16 @@
+import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
 from core.banco import conecta
 from core.conversores import valores_para_float
-import os
 from core.erros import trata_excecao
 from core.email_service import dados_email
 import imaplib
@@ -412,6 +422,12 @@ class ManipularEmailOC:
 
     def extrair_codigo_produto(self, texto_item, debug=False):
         try:
+            m = re.search(r'MTS(\d{4,6})', texto_item, re.IGNORECASE)
+
+            if m:
+                print("FORTPEL MTS:", m.group(1))
+
+                return m.group(1)
             cursor = conecta.cursor()
 
             # ----------------------------------
@@ -422,6 +438,11 @@ class ManipularEmailOC:
 
             texto_limpo = re.sub(r'NCM\s*:\s*\d+', '', texto_limpo, flags=re.IGNORECASE)
             texto_limpo = re.sub(r'LC\s*:\s*\d+', '', texto_limpo, flags=re.IGNORECASE)
+
+            m = re.search(
+                r'(?m)^\s*(\d{4,6})\s+[A-Z]',
+                texto_item
+            )
 
             # remove NCM grande tipo 84821010
             texto_limpo = re.sub(
@@ -435,6 +456,11 @@ class ManipularEmailOC:
             # ESTRATÉGIAS DE EXTRAÇÃO
             # ----------------------------------
             estrategias = [
+                (
+                    "codigo_grande_ean",
+                    200,
+                    r'\b\d{10,14}\b'
+                ),
 
                 (
                     "codigo_pos_MTS",
@@ -455,7 +481,7 @@ class ManipularEmailOC:
                 (
                     "codigo_ref_tecnica",
                     110,
-                    r'\b[A-Z]{2,}\s+(\d{3,6})\b'
+                    r'\b(?:GBR|ROL|REF)\s+(\d{3,6})\b'
                 ),
 
                 # código após referência técnica
@@ -483,7 +509,7 @@ class ManipularEmailOC:
                 (
                     "codigo_grudado_letras",
                     85,
-                    r'[A-Z]+(\d{4,6})\b'
+                    r'[A-Z]{2,}(\d{4,6})\b(?!\s*-)'
                 ),
 
                 # fallback controlado
@@ -509,7 +535,22 @@ class ManipularEmailOC:
 
                 for codigo in encontrados:
 
-                    # evita capturar NCM
+                    # 🔥 NOVO: tratar códigos grandes (EAN)
+                    if len(codigo) >= 10:
+
+                        # tenta últimos 6, 5 e 4 dígitos
+                        for tamanho in [6, 5, 4]:
+                            candidato = codigo[-tamanho:]
+
+                            candidatos.append({
+                                "codigo": candidato,
+                                "peso": peso,
+                                "estrategia": f"{nome}_last{tamanho}"
+                            })
+
+                        continue
+
+                    # comportamento original
                     if len(codigo) > 6:
                         continue
 
@@ -644,6 +685,12 @@ class ManipularEmailOC:
             if item_atual:
                 itens_brutos.append(item_atual)
 
+            print("\n===== ITENS BRUTOS =====")
+            for i, item in enumerate(itens_brutos, 1):
+                print(f"\nITEM BRUTO {i}:")
+                print(item)
+            print("========================")
+
             for item_txt in itens_brutos:
 
                 print("\nITEM ORIGINAL:")
@@ -662,7 +709,7 @@ class ManipularEmailOC:
                 dados_match = re.search(
                     r'''
                     ([\d.,]+)\s+       
-                    ([A-Z]{1,3})\s+    
+                    ([A-Z0-9]{1,3})\s+  
                     ([\d.,]+)\s+       
                     ([\d.,]+)\s+       
                     ([\d.,]+)\s+       
@@ -696,7 +743,10 @@ class ManipularEmailOC:
                 # 🔧 FALLBACK: EXTRAI DO TEXTO
                 # =========================
                 if not codigo_produto:
-                    codigo_produto = self.extrair_codigo_produto(item_txt)
+                    print("\n====================")
+                    print(item_txt)
+                    print("====================")
+                    codigo_produto = self.extrair_codigo_produto(item_txt, debug=True)
 
                 print("codigo encontrado:", codigo_produto)
 
@@ -791,9 +841,13 @@ class ManipularEmailOC:
                 descontos_float = valores_para_float(descontos)
 
                 valor_total_oc += frete_float
-                valor_total_oc -= descontos_float
+                # valor_total_oc -= descontos_float
 
                 total_geral_float = valores_para_float(total_geral)
+
+                print("Frete:", frete_float)
+                print("Desconto:", descontos_float)
+                print("Total Geral:", total_geral_float)
 
                 emissao_fire = datetime.strptime(emissao, '%d/%m/%Y').date()
 
@@ -891,7 +945,11 @@ class ManipularEmailOC:
 
                                 total_prod_float = valores_para_float(total_prod)
 
+                                print(f"Somando item: {total_prod_float}")
+
                                 valor_total_oc += total_prod_float
+
+                                print(f"Parcial: {valor_total_oc}")
 
                                 if ipi_float:
                                     valor_total_oc += total_prod_float * (ipi_float / 100)
@@ -932,6 +990,7 @@ class ManipularEmailOC:
                             tolerancia = 2.00  # diferença máxima aceitável em reais
 
                             if abs(valor_total_oc - total_geral_float) <= tolerancia:
+                                print("Valor OC calculado:", valor_total_oc)
                                 conecta.commit()
 
                                 print(f'Ordem de Compra Nº {num_oc} do {razao} foi lançada com sucesso!')
@@ -939,6 +998,7 @@ class ManipularEmailOC:
                                 self.imprimir_pdf_background(pdf_bytes)
                                 imap.store(num, '+FLAGS', '\\Deleted')
                             else:
+                                conecta.rollback()
                                 self.envia_email_valor_total_diferente(texto, total_geral_float, valor_total_oc, num_oc)
 
                 else:

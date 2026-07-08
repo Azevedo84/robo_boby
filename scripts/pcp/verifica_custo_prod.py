@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 import sys
 
-from scripts.inventor.aaa_estrutura_conj import estrutura
-
 os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -18,6 +16,7 @@ from core.conversores import valores_para_float
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+
 
 
 class VerificaProdutosProntos:
@@ -222,7 +221,7 @@ class VerificaProdutosProntos:
                            f"from estrutura "
                            f"where id_produto = {id_pai} and num_versao = {num_versao};")
             tabela_versoes = cursor.fetchall()
-            if not estrutura:
+            if not tabela_versoes:
                 lista_produto_sem_versao = []
                 msg = f"Produto sem versão vinculada{codigo_produto}"
                 lista_produto_sem_versao.append(msg)

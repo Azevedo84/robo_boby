@@ -1,8 +1,18 @@
+import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
 from core.banco import conecta
 from core.erros import trata_excecao
 from core.email_service import dados_email
-import os
-from datetime import datetime
+from datetime import datetime, date
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -74,6 +84,60 @@ class ConferirPreNF:
             """
 
             return html
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def envia_email_nf_atrasada(self, numero_nf, data_emissao, fornecedor, dias):
+        try:
+            saudacao, msg_final, email_user, password = dados_email()
+
+            subject = f'NF {numero_nf} - {fornecedor} atrasada {dias} dias'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['To'] = ", ".join(self.destinatario)
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\n"
+
+            body += f"NF {numero_nf} - {fornecedor} atrasada {dias} dias\n\n"
+
+            body += "\n" + msg_final
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            # 🔎 Localiza arquivos no servidor
+            arquivos = self.localizar_arquivos_nf(numero_nf, data_emissao)
+
+            # 📎 Anexa XML e PDF se existirem
+            for tipo, caminho in arquivos.items():
+                if caminho:
+                    with open(caminho, 'rb') as attachment:
+                        part = MIMEBase('application', "octet-stream")
+                        part.set_payload(attachment.read())
+                        encoders.encode_base64(part)
+
+                        nome_arquivo = os.path.basename(caminho)
+
+                        part.add_header(
+                            'Content-Disposition',
+                            'attachment',
+                            filename=Header(nome_arquivo, 'utf-8').encode()
+                        )
+
+                        msg.attach(part)
+
+            # 🚀 Envia email
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, self.destinatario, msg.as_string())
+            server.quit()
+
+            print("Email NF atrasada enviado com sucesso!")
 
         except Exception as e:
             trata_excecao(e)
@@ -158,6 +222,45 @@ class ConferirPreNF:
             server.quit()
 
             print("Email de divergência enviado com sucesso!")
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def envia_email_sem_estado_forn(self, fornecedor):
+        try:
+            saudacao, msg_final, email_user, password = dados_email()
+
+            subject = f'Cadastro Fornecedor {fornecedor} não tem estado cadastro!'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}<br><br>" \
+                   f"Cadastro Fornecedor {fornecedor} não tem estado cadastro!<br><br>"
+
+            body += "<br><br>"
+
+            body += f"Att,<br><br>" \
+                    f"Suzuki Máquinas Ltda<br>" \
+                    f"Fone (51) 3561.2583/(51) 3170.0965<br>" \
+                    f"Mensagem enviada automaticamente, por favor não responda.<br>" \
+                    f"Se houver algum problema com o recebimento de emails favor entrar em contato " \
+                    f"pelo email maquinas@unisold.com.br."
+
+            msg.attach(MIMEText(body, 'html'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, self.destinatario, text)
+
+            server.quit()
+
+            print("Email Fornecedor SEM ESTADO com sucesso!")
 
         except Exception as e:
             trata_excecao(e)
@@ -293,7 +396,7 @@ class ConferirPreNF:
                 oc = cursor_oc.fetchall()
 
                 if not oc:
-                    msg = f"❌ Produto {cod_prod} - {descricao} não encontrado na NF lançada nem em OC aberta."
+                    msg = f"❌ Produto {cod_prod} - {descricao} não encontrado na NF lançada nem em OC aberta com este Fornecedor."
                     nf_tem_erro.append(msg)
                     return nf_tem_erro
 
@@ -584,6 +687,8 @@ class ConferirPreNF:
                                (status, id_nf,))
                 conecta.commit()
 
+                self.conferir_datas_nf(id_nf)
+
         except Exception as e:
             trata_excecao(e)
             raise
@@ -651,6 +756,41 @@ class ConferirPreNF:
             """, (status, id_nf))
 
             conecta.commit()
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def conferir_datas_nf(self, id_nf):
+        try:
+            cursor_itens = conecta.cursor()
+            cursor_itens.execute("""
+                            SELECT NF.NUMERO_NF, NF.DATA_EMISSAO, FORN.RAZAO, FORN.ESTADO
+                            FROM PRE_NF_ENTRADA NF
+                            INNER JOIN FORNECEDORES as forn ON nf.ID_FORNECEDOR = forn.id
+                            WHERE NF.ID = ?
+                        """, (id_nf,))
+            nfs = cursor_itens.fetchall()
+
+            if nfs:
+                for nf in nfs:
+                    numero_nf, emissao, fornecedor, estado = nf
+                    if not estado:
+                        self.envia_email_sem_estado_forn(fornecedor)
+                    else:
+                        hoje = date.today()
+                        dias = (hoje - emissao).days
+
+                        if estado == "RS":
+                            limite = 2
+                        else:
+                            limite = 7
+
+                        if dias > limite:
+                            print(hoje, emissao, dias, limite)
+                            print(f"NF {numero_nf} atrasada ({dias} dias)")
+                            self.envia_email_nf_atrasada(numero_nf, emissao, fornecedor, dias)
+
 
         except Exception as e:
             trata_excecao(e)

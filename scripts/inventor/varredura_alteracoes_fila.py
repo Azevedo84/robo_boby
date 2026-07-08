@@ -1,15 +1,20 @@
 import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
+import os
 from datetime import datetime, timedelta
 from core.banco import conecta_engenharia
+from core.erros import trata_excecao
 from core.inventor import pasta_arq, ignorar_pastas, extensoes, padrao_desenho, definir_classificacao
 from core.inventor import padronizar_caminho
-from core.email_service import dados_email
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import smtplib
-
-
-destinatario = ['<maquinas@unisold.com.br>']
 
 cursor = conecta_engenharia.cursor()
 
@@ -19,7 +24,6 @@ cursor.execute("""
 SELECT id, caminho, data_mod
 FROM arquivos
 """)
-
 registros = cursor.fetchall()
 
 # dicionário para comparação rápida
@@ -42,117 +46,116 @@ novos = 0
 alterados = 0
 deletados = 0
 
-
-def envia_email_desenho_duplicado(texto, desenho):
+def insert_divergencia(dados):
     try:
-        saudacao, msg_final, email_user, password = dados_email()
+        id_divergencia, id_arquivo, obs = dados
 
-        subject = f'ENGENHARIA VARREDURA - DESENHO DUPLICADO {desenho}'
+        cursor = conecta_engenharia.cursor()
+        cursor.execute("""
+                        SELECT ID_TIPO_DIVERGENCIA, ID_ARQUIVO, OBS
+                        FROM DIVERGENCIAS
+                        WHERE ID_TIPO_DIVERGENCIA = ? and ID_ARQUIVO = ?
+                    """, (id_divergencia, id_arquivo,))
+        tem_divergencia = cursor.fetchall()
 
-        msg = MIMEMultipart()
-        msg['From'] = email_user
-        msg['Subject'] = subject
+        if not tem_divergencia:
+            sql = """
+                    INSERT INTO DIVERGENCIAS (ID_TIPO_DIVERGENCIA, ID_ARQUIVO, OBS)
+                    VALUES (?, ?, ?);
+                    """
+            cursor.execute(sql, (id_divergencia, id_arquivo, obs))
 
-        body = f"{saudacao}\n\nO desenho {desenho} está duplicado!\n\n"
+            conecta_engenharia.commit()
 
-        for i in texto:
-            body += f"{i}\n\n"
-        body += f"\n{msg_final}"
-
-        msg.attach(MIMEText(body, 'plain'))
-
-        text = msg.as_string()
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(email_user, password)
-
-        server.sendmail(email_user, destinatario, text)
-        server.quit()
-
-        print("email enviado DUPLICADO")
+            print("\n\n")
+            print("Divergencia Inserida com sucesso!", id_divergencia, id_arquivo, obs)
+            print("\n\n")
 
     except Exception as e:
-        print(e)
+        trata_excecao(e)
+        raise
 
 # -------------------------
 # FUNÇÃO FILA
 # -------------------------
-def inserir_fila_conferencia(cursor, id_arquivo):
+def inserir_fila_conferencia(cursor, id_arquivo, desenho):
     try:
-        # 🔹 evita duplicado
-        cursor.execute("""
-            SELECT 1 FROM FILA_CONFERENCIA
-            WHERE ID_ARQUIVO = ?
-        """, (id_arquivo,))
-
-        if cursor.fetchone():
-            print("⚠️ Já está na fila:", id_arquivo)
-            return
-        
-        # 🔹 insere o próprio arquivo
-        cursor.execute("""
-            INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
-            VALUES (?, ?)
-        """, (id_arquivo, "ALTERADOS"))
-
-        print("📥 Inserido na fila:", id_arquivo)
-
-        # 🔹 pega dados do arquivo
-        cursor.execute("""
-            SELECT NOME_BASE, TIPO_ARQUIVO
-            FROM ARQUIVOS
-            WHERE ID = ?
-        """, (id_arquivo,))
-
-        row = cursor.fetchone()
-
-        if not row:
-            return
-
-        nome_base, tipo = row
-
-        # 🔥 só IPT e IAM precisam garantir IDW
-        if tipo not in ("IPT", "IAM"):
-            return
-
-        # 🔹 extrai código do desenho
-        match = padrao_desenho.search(nome_base)
-
-        if not match:
-            return
-
-        codigo = match.group()
-
-        # 🔹 busca IDW pelo código
-        cursor.execute("""
-            SELECT ID, TIPO_ARQUIVO, CAMINHO
-            FROM ARQUIVOS
-            WHERE NOME_BASE LIKE ?
-              AND TIPO_ARQUIVO = 'IDW'
-        """, (f"%{codigo}",))
-
-        resultados = cursor.fetchall()
-
-        if len(resultados) == 1:
-            id_idw = resultados[0][0]
-
+        if desenho.lower() not in ("a4  assembles.idw", "a4  peças.idw"):
             # 🔹 evita duplicado
             cursor.execute("""
                 SELECT 1 FROM FILA_CONFERENCIA
                 WHERE ID_ARQUIVO = ?
-            """, (id_idw,))
+            """, (id_arquivo,))
 
-            if not cursor.fetchone():
+            if cursor.fetchone():
+                print("⚠️ Já está na fila:", id_arquivo)
+                return
+
+            # 🔹 insere o próprio arquivo
+            cursor.execute("""
+                INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+                VALUES (?, ?)
+            """, (id_arquivo, "ALTERADOS"))
+
+            print("📥 Inserido na fila:", id_arquivo, desenho)
+
+            # 🔹 pega dados do arquivo
+            cursor.execute("""
+                SELECT NOME_BASE, TIPO_ARQUIVO
+                FROM ARQUIVOS
+                WHERE ID = ?
+            """, (id_arquivo,))
+
+            row = cursor.fetchone()
+
+            if not row:
+                return
+
+            nome_base, tipo = row
+
+            # 🔥 só IPT e IAM precisam garantir IDW
+            if tipo not in ("IPT", "IAM"):
+                return
+
+            # 🔹 extrai código do desenho
+            match = padrao_desenho.search(nome_base)
+
+            if not match:
+                return
+
+            codigo = match.group()
+
+            # 🔹 busca IDW pelo código
+            cursor.execute("""
+                SELECT ID, TIPO_ARQUIVO, CAMINHO
+                FROM ARQUIVOS
+                WHERE NOME_BASE = ?
+                  AND TIPO_ARQUIVO = 'IDW'
+            """, (codigo,))
+
+            resultados = cursor.fetchall()
+
+            if len(resultados) == 1:
+                id_idw = resultados[0][0]
+
+                # 🔹 evita duplicado
                 cursor.execute("""
-                    INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
-                    VALUES (?, ?)
-                """, (id_idw, "ALTERADOS"))
+                    SELECT 1 FROM FILA_CONFERENCIA
+                    WHERE ID_ARQUIVO = ?
+                """, (id_idw,))
 
-                print("📄 IDW inserido na fila:", id_idw)
+                if not cursor.fetchone():
+                    cursor.execute("""
+                        INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+                        VALUES (?, ?)
+                    """, (id_idw, "ALTERADOS"))
 
-        elif len(resultados) > 1:
-            print(f"⚠️ IDW duplicado para código {codigo}")
-            envia_email_desenho_duplicado(resultados, codigo)
+                    print("📄 IDW inserido na fila:", id_idw, desenho)
+
+            elif len(resultados) > 1:
+                ids = [linha[0] for linha in resultados]
+                dados = (1, id_arquivo, f"VARREDURA - IDS dos arquivos IPT/IAM: {ids}")
+                insert_divergencia(dados)
 
     except Exception as e:
         print("Erro ao inserir na fila:", e)
@@ -210,7 +213,7 @@ for root, dirs, files in os.walk(pasta_arq):
 
             print("🆕 NOVO:", file)
 
-            inserir_fila_conferencia(cursor, id_arquivo)
+            inserir_fila_conferencia(cursor, id_arquivo, file)
 
             novos += 1
 
@@ -234,7 +237,7 @@ for root, dirs, files in os.walk(pasta_arq):
 
                 print("🔄 ALTERADO:", file)
 
-                inserir_fila_conferencia(cursor, id_arquivo)
+                inserir_fila_conferencia(cursor, id_arquivo, file)
 
                 alterados += 1
 
@@ -254,11 +257,13 @@ for caminho_banco, (id_arquivo, _) in arquivos_banco.items():
         cursor.execute("DELETE FROM propriedades_ipt WHERE id_arquivo = ?", (id_arquivo,))
         cursor.execute("DELETE FROM propriedades_iam WHERE id_arquivo = ?", (id_arquivo,))
         cursor.execute("DELETE FROM propriedades_idw WHERE id_arquivo = ?", (id_arquivo,))
+        cursor.execute("DELETE FROM propriedades_idw WHERE ID_ARQUIVO_REFERENCIA = ?", (id_arquivo,))
         cursor.execute("DELETE FROM COTAS_IDW WHERE id_arquivo = ?", (id_arquivo,))
 
         cursor.execute("DELETE FROM FILA_CONFERENCIA WHERE id_arquivo = ?", (id_arquivo,))
         cursor.execute("DELETE FROM FILA_LANCA_PROPRIEDADE WHERE id_arquivo = ?", (id_arquivo,))
         cursor.execute("DELETE FROM FILA_GERAR_PDF WHERE id_arquivo = ?", (id_arquivo,))
+        cursor.execute("DELETE FROM DIVERGENCIAS WHERE id_arquivo = ?", (id_arquivo,))
 
         # 3. remove arquivo
         cursor.execute("DELETE FROM arquivos WHERE id = ?", (id_arquivo,))

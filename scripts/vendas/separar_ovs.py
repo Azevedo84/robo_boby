@@ -1,5 +1,15 @@
-from core.banco import conecta, conecta_robo
 import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
+from core.banco import conecta, conecta_robo
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -15,7 +25,7 @@ from core.email_service import dados_email
 
 class SepararOVS:
     def __init__(self):
-        self.destinatario = ['<maquinas@unisold.com.br>']
+        self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
 
         self.manipula_comeco()
 
@@ -123,11 +133,7 @@ class SepararOVS:
 
             msg.attach(MIMEText(body, 'plain'))
 
-            diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-
-            caminho_arquivo = os.path.join(diretorio_atual, caminho)
-
-            attachment = open(caminho_arquivo, 'rb')
+            attachment = open(caminho, 'rb')
 
             part = MIMEBase('application', "octet-stream")
             part.set_payload(attachment.read())
@@ -211,13 +217,14 @@ class SepararOVS:
                         if lista_email:
                             num_ov = dados_cliente[0][1]
 
-                            caminho = fr'C:\Users\Anderson\PycharmProjects\robo_boby\Listagem - OV {num_ov}.pdf'
                             arquivo = f'Listagem - OV {num_ov}.pdf'
+                            caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), arquivo)
 
-                            self.gerar_pdf_listagem_separar(arquivo, dados_cliente, lista_email)
-                            self.inserir_no_banco(dados_cliente, num_ov)
+                            self.gerar_pdf_listagem_separar(caminho, dados_cliente, lista_email)
                             self.envia_email(num_ov, caminho, arquivo)
-                            self.excluir_arquivo(arquivo)
+
+                            self.inserir_no_banco(dados_cliente, num_ov)
+                            self.excluir_arquivo(caminho)
 
         except Exception as e:
             trata_excecao(e)

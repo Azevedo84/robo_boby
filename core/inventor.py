@@ -1,9 +1,10 @@
 import re
 import unicodedata
+from pathlib import Path
 
 pasta_arq = r"\\Publico\c\Inventor"
 extensoes = (".iam", ".ipt", ".idw")
-padrao_desenho = re.compile(r'\b\d+(\.\d+)+\b')
+padrao_desenho = re.compile(r'\b\d{1,4}(?:\.\d{1,4})+\b')
 padrao_terceiro_09 = re.compile(r'^\d{2}\.\d{2}\.\d{3}\.09$')
 ignorar_pastas = {
     "oldversions",
@@ -41,17 +42,32 @@ def padronizar_caminho(caminho: str) -> str | None:
     if not caminho:
         return None
 
-    original = caminho
-
     caminho = caminho.strip()
     caminho = caminho.replace("/", "\\")
     caminho = caminho.lower()
 
     if not caminho.startswith("\\\\publico\\c\\"):
-        print(f"⚠️ FORA DO PADRÃO: {original}")
-        return None
+        if caminho.startswith("\\\\publico\\inventor\\"):
+            caminho_corrigido = caminho.replace(
+                "\\\\publico\\inventor\\",
+                "\\\\publico\\c\\inventor\\",
+                1
+            )
 
-    return caminho
+            print("caminho corrigido:", caminho_corrigido)
+
+            if Path(caminho_corrigido).exists():
+                print("✅ caminho válido após correção:", caminho_corrigido)
+                return caminho_corrigido
+            else:
+                print(f"❌ não existe nem corrigido: {caminho_corrigido}")
+                return None
+
+    if caminho.startswith("\\\\publico\\c\\"):
+        return caminho
+    else:
+        print(f"CAMINHO NÃO EXISTE!!")
+        return None
 
 def corrigir_caminho_inventor(caminho: str) -> str:
     if not caminho:

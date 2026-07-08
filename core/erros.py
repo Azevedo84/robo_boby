@@ -3,7 +3,7 @@ import os
 import socket
 import traceback
 from datetime import datetime
-
+import sys
 
 def grava_erro_banco(nome_funcao, mensagem, nome_arquivo, num_linha):
     try:
@@ -40,6 +40,8 @@ def grava_erro_banco(nome_funcao, mensagem, nome_arquivo, num_linha):
             f.write(f"\nArquivo: {nome_arquivo}")
             f.write(f"\nFunção: {nome_funcao}")
             f.write(f"\nComputador: {nome_computador}")
+            f.write(f"\nPython: {sys.version}")
+            f.write(f"\nExecutável: {sys.executable}")
             f.write(f"\nLinha: {num_linha}")
             f.write(f"\nErro completo:\n{mensagem}")
             f.write("\n")

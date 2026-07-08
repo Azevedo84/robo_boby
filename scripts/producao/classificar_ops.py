@@ -88,7 +88,7 @@ class ClassificarOps:
 
     def manipula_comeco(self):
         try:
-            previsao = datetime.now()
+            previsao = date.today()
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT prod.id, op.numero, op.codigo, op.id_estrutura, prod.descricao, "

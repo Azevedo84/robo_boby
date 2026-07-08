@@ -13,9 +13,9 @@ class AgendamentoConfig(TypedDict):
 
 USUARIO = "Anderson"
 
-nome_arquivo = "plano_pcp"
-HORARIO = "11:30"
-sub_pasta = "pcp"
+nome_arquivo = "fila_gerar_pdf"
+HORARIO = "12:18"
+sub_pasta = "inventor"
 
 # IMPORTANTE: ":" não pode no nome da tarefa
 NOME_TAREFA = f"{HORARIO.replace(':', '_')}_{nome_arquivo}"

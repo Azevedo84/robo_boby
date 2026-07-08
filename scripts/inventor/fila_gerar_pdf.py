@@ -1,3 +1,14 @@
+import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
 import win32com.client
 from core.banco import conecta_engenharia
 from core.erros import trata_excecao
@@ -42,16 +53,19 @@ class GravarPropriedadeInventor:
     def worker_fila(self):
         inventor = None
         try:
+            num_de_arquivos = 100
+
             cursor = conecta_engenharia.cursor()
-            cursor.execute("""
-                    SELECT fila.ID_ARQUIVO, arq.caminho, arq.NOME_BASE
+            cursor.execute(f"""
+                    SELECT FIRST {num_de_arquivos} 
+                    fila.ID_ARQUIVO, arq.caminho, arq.NOME_BASE
                     FROM FILA_GERAR_PDF as fila
                     INNER JOIN ARQUIVOS AS arq ON fila.ID_ARQUIVO = arq.id
                     ORDER BY fila.ID
                 """)
             fila = cursor.fetchall()
 
-            print(f"\n📦 Total na fila: {len(fila)}")
+            print(f"\n📦 Total na fila PDF: {len(fila)}")
 
             if fila:
                 inventor = self.conectar_inventor()

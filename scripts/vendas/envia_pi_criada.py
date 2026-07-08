@@ -19,7 +19,7 @@ from core.email_service import dados_email
 
 class EnviaPICriadas:
     def __init__(self):
-        self.destinatario = ['<maquinas@unisold.com.br>']
+        self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
 
     def manipula_comeco(self):
         try:

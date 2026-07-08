@@ -775,7 +775,9 @@ class ExecutaPlanoPcp:
             server.starttls()
             server.login(email_user, password)
 
-            server.sendmail(email_user, self.destinatario, text)
+            destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+
+            server.sendmail(email_user, destinatario, text)
             attachment.close()
 
             server.quit()
@@ -821,7 +823,9 @@ class ExecutaPlanoPcp:
             server.starttls()
             server.login(email_user, password)
 
-            server.sendmail(email_user, self.destinatario, text)
+            destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+
+            server.sendmail(email_user, destinatario, text)
             attachment.close()
 
             server.quit()
@@ -1590,34 +1594,34 @@ class ExecutaPlanoPcp:
             if num_conj == 10:
                 s = re.sub(r"[^\d.]", "", ref)
                 s = re.sub(r"\.+$", "", s)
+                if s:
+                    cursor = conecta.cursor()
+                    cursor.execute(
+                        f"SELECT DISTINCT codigo, descricao, COALESCE(obs, ''), unidade, COALESCE(tipomaterial, ''), "
+                        f"COALESCE(localizacao, ''), id_versao "
+                        f"FROM produto "
+                        f"WHERE obs = '{ref}';")
+                    detalhes_produto = cursor.fetchall()
 
-                cursor = conecta.cursor()
-                cursor.execute(
-                    f"SELECT DISTINCT codigo, descricao, COALESCE(obs, ''), unidade, COALESCE(tipomaterial, ''), "
-                    f"COALESCE(localizacao, ''), id_versao "
-                    f"FROM produto "
-                    f"WHERE obs = '{ref}';")
-                detalhes_produto = cursor.fetchall()
+                    if detalhes_produto:
+                        qtde_itens = len(detalhes_produto)
+                        if qtde_itens > 1:
+                            prod_duplicado = True
 
-                if detalhes_produto:
-                    qtde_itens = len(detalhes_produto)
-                    if qtde_itens > 1:
-                        prod_duplicado = True
+                    caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
 
-                caminho_pdf = rf"\\Publico\C\OP\Projetos\{s}.pdf"
+                    if not os.path.exists(caminho_pdf):
+                        acabado_sem_desenho = True
 
-                if not os.path.exists(caminho_pdf):
-                    acabado_sem_desenho = True
+                    estrutura = self.manipula_dados_tabela_estrutura(cod)
 
-                estrutura = self.manipula_dados_tabela_estrutura(cod)
+                    if estrutura:
+                        qtde_producao = self.manipula_dados_tabela_producao(cod)
+                        qtde_necessidade -= qtde_producao
+                        qtde_necessidade = round(qtde_necessidade, 3)
 
-                if estrutura:
-                    qtde_producao = self.manipula_dados_tabela_producao(cod)
-                    qtde_necessidade -= qtde_producao
-                    qtde_necessidade = round(qtde_necessidade, 3)
-
-                else:
-                    produto_sem_estrutura = True
+                    else:
+                        produto_sem_estrutura = True
 
             qtde_necessidade_ops = self.manipula_dados_tabela_consumo(cod)
             qtde_necessidade += qtde_necessidade_ops
@@ -1853,7 +1857,7 @@ class ExecutaPlanoPcp:
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT oc.data, oc.numero, cli.razao, prodoc.quantidade, prodoc.dataentrega, "
-                           f"COALESCE(prodoc.id_pedido, ''), COALESCE(prodoc.id_expedicao, '') "
+                           f"COALESCE(prodoc.id_pedido, '') "
                            f"FROM PRODUTOORDEMCOMPRA as prodoc "
                            f"INNER JOIN produto as prod ON prodoc.produto = prod.id "
                            f"INNER JOIN ordemcompra as oc ON prodoc.mestre = oc.id "
@@ -1866,7 +1870,7 @@ class ExecutaPlanoPcp:
             dados_ov = cursor.fetchall()
             if dados_ov:
                 for i_ov in dados_ov:
-                    emissao_ov, num_ov, clie_ov, qtde_ov, entrega_ov, num_pi_ov, num_exp = i_ov
+                    emissao_ov, num_ov, clie_ov, qtde_ov, entrega_ov, num_pi_ov = i_ov
 
                     dados = (num_pi_ov, num_ov, clie_ov)
                     tabela_nova.append(dados)

@@ -1,4 +1,14 @@
 import os
+from pathlib import Path
+import sys
+
+os.chdir(r"C:\Users\Anderson\PycharmProjects\robo_boby")
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
 import win32com.client
 from core.banco import conecta_engenharia
 from core.erros import trata_excecao
@@ -17,33 +27,30 @@ class WorkerFilaConferencia:
 
         self.manipula_comeco()
 
-    def envia_email_desenho_sem_vinculo(self, texto, desenho):
+    def insert_divergencia(self, dados):
         try:
-            saudacao, msg_final, email_user, password = dados_email()
+            id_divergencia, id_arquivo, obs = dados
 
-            subject = f'ENGENHARIA FILA - DESENHO SEM VÍNCULO {desenho}'
+            cursor = conecta_engenharia.cursor()
+            cursor.execute("""
+                            SELECT ID_TIPO_DIVERGENCIA, ID_ARQUIVO, OBS
+                            FROM DIVERGENCIAS
+                            WHERE ID_TIPO_DIVERGENCIA = ? and ID_ARQUIVO = ?
+                        """, (id_divergencia, id_arquivo,))
+            tem_divergencia = cursor.fetchall()
 
-            msg = MIMEMultipart()
-            msg['From'] = email_user
-            msg['Subject'] = subject
+            if not tem_divergencia:
+                sql = """
+                        INSERT INTO DIVERGENCIAS (ID_TIPO_DIVERGENCIA, ID_ARQUIVO, OBS)
+                        VALUES (?, ?, ?);
+                        """
+                cursor.execute(sql, (id_divergencia, id_arquivo, obs))
 
-            body = f"{saudacao}\n\nO desenho {desenho} tem problemas com vínculos dos arquivos!\n\n"
+                conecta_engenharia.commit()
 
-            for i in texto:
-                body += f"{i}\n\n"
-            body += f"\n{msg_final}"
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            text = msg.as_string()
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(email_user, password)
-
-            server.sendmail(email_user, self.destinatario, text)
-            server.quit()
-
-            print("email enviado SEM VINCULO")
+                print("\n\n")
+                print("Divergencia Inserida com sucesso!", id_divergencia, id_arquivo, obs)
+                print("\n\n")
 
         except Exception as e:
             trata_excecao(e)
@@ -133,17 +140,18 @@ class WorkerFilaConferencia:
                 msg2 = f"{e}"
 
                 cursor.execute("""
-                                    SELECT ID, caminho
+                                    SELECT ID, caminho, CLASSIFICACAO
                                     FROM ARQUIVOS
                                     WHERE ID = ?
                                 """, (id_arquivo,))
 
                 dados_arq = cursor.fetchall()
 
-                id_arq, caminho = dados_arq[0]
+                id_arq, caminho, classificacao = dados_arq[0]
 
                 if not "\\inventor\\biblioteca" in caminho:
-                    self.enviar_email_erro_unicode(caminho, msg1, msg2)
+                    if classificacao != "TERCEIROS":
+                        self.enviar_email_erro_unicode(caminho, msg1, msg2)
                 else:
                     print(f"❌ Sem BOM estruturada (biblioteca): {doc.FullFileName}")
                     print(f"Produto da Biblioteca e vai ser exclúido da fila!")
@@ -219,7 +227,9 @@ class WorkerFilaConferencia:
                     print(f"❌ Erro ao ler quantidade: {e}")
                     raise Exception(f"Erro na quantidade da BOM: {doc.FullFileName}")
 
-                estrutura[id_filho] = qtde
+                estrutura[id_filho] = estrutura.get(id_filho, 0) + qtde
+
+                print(id_filho, estrutura[id_filho])
 
                 # 🔴 FILA (só depois que passou tudo acima)
                 if origem != "ALTERADOS":
@@ -234,6 +244,7 @@ class WorkerFilaConferencia:
     def consulta_e_cria_id_arquivo(self, cursor, caminho):
         try:
             if not caminho:
+                print("false")
                 return False
 
             caminho = caminho.strip()
@@ -242,6 +253,7 @@ class WorkerFilaConferencia:
 
             if not caminho:
                 print("🚨 CAMINHO SUSPEITO - consulta_e_cria_id_arquivo", caminho)
+                print("false")
                 return False
 
             cursor.execute("""
@@ -282,11 +294,11 @@ class WorkerFilaConferencia:
                 tamanho,
                 data_mod
             ))
-
             return cursor.fetchone()[0]
 
         except Exception as e:
             trata_excecao(e)
+            print("raise")
             raise
 
     def inserir_fila_conferencia(self, cursor, id_arquivo):
@@ -317,14 +329,12 @@ class WorkerFilaConferencia:
 
             # 🔹 INSERT ou UPDATE
             for id_filho, qtde_nova in estrutura_nova.items():
-
                 if id_filho not in estrutura_atual:
                     cursor.execute("""
                         INSERT INTO ESTRUTURA (ID_PAI, ID_FILHO, QTDE)
                         VALUES (?, ?, ?)
                     """, (id_pai, id_filho, qtde_nova))
                     inseridos += 1
-
                 else:
                     qtde_atual = estrutura_atual[id_filho]
 
@@ -428,13 +438,20 @@ class WorkerFilaConferencia:
     def worker_fila(self):
         inventor = None
         try:
+            num_de_arquivos = 50
+
             cursor = conecta_engenharia.cursor()
-            cursor.execute("""
-                    SELECT fila.ID_ARQUIVO, fila.ORIGEM, arq.caminho, arq.NOME_BASE
-                    FROM FILA_CONFERENCIA as fila
-                    INNER JOIN ARQUIVOS AS arq ON fila.ID_ARQUIVO = arq.id
-                    ORDER BY fila.ID
-                """)
+            cursor.execute(f"""
+                SELECT FIRST {num_de_arquivos}
+                       fila.ID_ARQUIVO,
+                       fila.ORIGEM,
+                       arq.CAMINHO,
+                       arq.NOME_BASE
+                FROM FILA_CONFERENCIA fila
+                INNER JOIN ARQUIVOS arq
+                    ON arq.ID = fila.ID_ARQUIVO
+                ORDER BY fila.ID
+            """)
             fila = cursor.fetchall()
 
             print(f"\n📦 Total na fila: {len(fila)}")
@@ -511,6 +528,7 @@ class WorkerFilaConferencia:
                     "material": props.get("Material"),
                     "authority": props.get("Authority"),
                     "engineer": props.get("Engineer"),
+                    "stock_number": props.get("Stock Number"),
                 }
 
                 erros = []
@@ -535,6 +553,15 @@ class WorkerFilaConferencia:
             elif tipo == "IPT":
                 self.consulta_idw_colocar_na_fila(cursor, id_arquivo, caminho)
 
+                if props.get("Comprimento"):
+                    compr_final = props.get("Comprimento")
+                elif props.get("comprimento"):
+                    compr_final = props.get("comprimento")
+                elif props.get("COMPRIMENTO"):
+                    compr_final = props.get("COMPRIMENTO")
+                else:
+                    compr_final = ""
+
                 dados = {
                     "revision_number": props.get("Revision Number"),
                     "part_number": props.get("Part Number"),
@@ -544,7 +571,8 @@ class WorkerFilaConferencia:
                     "vendor": props.get("Vendor"),
                     "authority": props.get("Authority"),
                     "engineer": props.get("Engineer"),
-                    "comprimento": props.get("Comprimento")
+                    "stock_number": props.get("Stock Number"),
+                    "comprimento": compr_final
                 }
 
                 erros = []
@@ -572,17 +600,6 @@ class WorkerFilaConferencia:
 
         except Exception as e:
             trata_excecao(e)
-
-            cursor.execute("""
-                            SELECT ID, NOME_BASE, CAMINHO
-                            FROM ARQUIVOS
-                            WHERE ID = ?
-                        """, (id_arquivo,))
-
-            idw_result = cursor.fetchall()
-            desenho = idw_result[0][1]
-            self.envia_email_desenho_sem_vinculo(idw_result, desenho)
-
             return False
 
     def consulta_propriedades_inventor(self, doc):
@@ -648,6 +665,7 @@ class WorkerFilaConferencia:
                     MATERIAL=?, 
                     AUTHORITY=?, 
                     ENGINEER=?, 
+                    STOCK_NUMBER=?, 
                     TOTAL_ITENS=?
                     WHERE ID_ARQUIVO=?
                 """, (
@@ -658,6 +676,7 @@ class WorkerFilaConferencia:
                         props_iam["material"],
                         props_iam["authority"],
                         props_iam["engineer"],
+                        props_iam["stock_number"],
                         props_iam["total_itens"],
                         id_arquivo
                     ))
@@ -667,8 +686,8 @@ class WorkerFilaConferencia:
                 cursor.execute("""
                     INSERT INTO PROPRIEDADES_IAM
                     (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, 
-                    DESCRIPTION, MATERIAL, AUTHORITY, ENGINEER, TOTAL_ITENS)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    DESCRIPTION, MATERIAL, AUTHORITY, ENGINEER, STOCK_NUMBER, TOTAL_ITENS)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, ( id_arquivo,
                         props_iam["revision_number"],
                         props_iam["part_number"],
@@ -677,6 +696,7 @@ class WorkerFilaConferencia:
                         props_iam["material"],
                         props_iam["authority"],
                        props_iam["engineer"],
+                       props_iam["stock_number"],
                         props_iam["total_itens"],
                     ))
 
@@ -703,6 +723,7 @@ class WorkerFilaConferencia:
                     VENDOR=?, 
                     AUTHORITY=?,
                     ENGINEER=?,
+                    STOCK_NUMBER=?, 
                     COMPRIMENTO=?
                     WHERE ID_ARQUIVO=?
                 """, (
@@ -714,6 +735,7 @@ class WorkerFilaConferencia:
                         props_ipt["vendor"],
                         props_ipt["authority"],
                         props_ipt["engineer"],
+                        props_ipt["stock_number"],
                         props_ipt["comprimento"],
                         id_arquivo
                     ))
@@ -721,8 +743,8 @@ class WorkerFilaConferencia:
                 cursor.execute("""
                     INSERT INTO PROPRIEDADES_IPT
                     (ID_ARQUIVO, REVISION_NUMBER, PART_NUMBER, COST_CENTER, 
-                    DESCRIPTION, MATERIAL, VENDOR, AUTHORITY, ENGINEER, COMPRIMENTO)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    DESCRIPTION, MATERIAL, VENDOR, AUTHORITY, ENGINEER, STOCK_NUMBER, COMPRIMENTO)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (id_arquivo,
                       props_ipt["revision_number"],
                       props_ipt["part_number"],
@@ -732,6 +754,7 @@ class WorkerFilaConferencia:
                       props_ipt["vendor"],
                       props_ipt["authority"],
                       props_ipt["engineer"],
+                      props_ipt["stock_number"],
                       props_ipt["comprimento"]
                     ))
             return True
@@ -742,71 +765,74 @@ class WorkerFilaConferencia:
 
     def processar_idw(self, cursor, doc, id_arquivo, caminho):
         try:
+            refs = list(doc.ReferencedDocuments)
+
+            if not refs:
+                print("❌ IDW SEM REFERÊNCIA:", caminho)
+                raise Exception(f"IDW sem referência: {caminho}")
+
             for ref in doc.ReferencedDocuments:
-                caminho_ref = ref.FullFileName
-
-                id_ref = self.consulta_e_cria_id_arquivo(cursor, caminho_ref)
-
-                cursor.execute("""
-                    DELETE FROM PROPRIEDADES_IDW WHERE ID_ARQUIVO=?
-                """, (id_arquivo,))
-
-                cursor.execute("""
-                    INSERT INTO PROPRIEDADES_IDW (ID_ARQUIVO, ID_ARQUIVO_REFERENCIA)
-                    VALUES (?, ?)
-                """, (id_arquivo, id_ref))
-
                 try:
-                    # 🔥 limpar cotas
-                    cursor.execute("""
-                        DELETE FROM COTAS_IDW WHERE ID_ARQUIVO=?
-                    """, (id_arquivo,))
+                    caminho_ref = ref.FullFileName
 
-                    cotas_unicas = set()  # 🔥 evita repetição
-
-                    for sheet in doc.Sheets:
-                        for dim in sheet.DrawingDimensions:
-
-                            try:
-                                valor = dim.ModelValue
-                                valor_mm = round((valor * 10), 2)
-                            except:
-                                continue  # 🔥 ignora erro
-
-                            if valor_mm is None:
-                                continue  # 🔥 garantia extra
-
-                            cotas_unicas.add(valor_mm)
-
-                    # 🔥 salva só valores únicos
-                    for valor_mm in cotas_unicas:
+                    id_ref = self.consulta_e_cria_id_arquivo(cursor, caminho_ref)
+                    if id_ref:
                         cursor.execute("""
-                            INSERT INTO COTAS_IDW (ID, ID_ARQUIVO, VALOR_COTA)
-                            VALUES (GEN_ID(GEN_COTAS_IDW_ID,1), ?, ?)
-                        """, (id_arquivo, valor_mm))
+                            DELETE FROM PROPRIEDADES_IDW WHERE ID_ARQUIVO=?
+                        """, (id_arquivo,))
+
+                        cursor.execute("""
+                            INSERT INTO PROPRIEDADES_IDW (ID_ARQUIVO, ID_ARQUIVO_REFERENCIA)
+                            VALUES (?, ?)
+                        """, (id_arquivo, id_ref))
+
+                        try:
+                            # 🔥 limpar cotas
+                            cursor.execute("""
+                                DELETE FROM COTAS_IDW WHERE ID_ARQUIVO=?
+                            """, (id_arquivo,))
+
+                            cotas_unicas = set()  # 🔥 evita repetição
+
+                            for sheet in doc.Sheets:
+                                for dim in sheet.DrawingDimensions:
+                                    try:
+                                        valor = dim.ModelValue
+                                        valor_mm = round((valor * 10), 2)
+                                        print("SALVANDO COTAS:", valor_mm)
+                                    except:
+                                        print("continue")
+                                        continue  # 🔥 ignora erro
+
+                                    if valor_mm is None:
+                                        print("continue")
+                                        continue  # 🔥 garantia extra
+
+                                    cotas_unicas.add(valor_mm)
+
+                            # 🔥 salva só valores únicos
+                            for valor_mm in cotas_unicas:
+                                cursor.execute("""
+                                    INSERT INTO COTAS_IDW (ID, ID_ARQUIVO, VALOR_COTA)
+                                    VALUES (GEN_ID(GEN_COTAS_IDW_ID,1), ?, ?)
+                                """, (id_arquivo, valor_mm))
+
+                        except Exception as e:
+                            print("Erro ao pegar cotas:", e)
+                            print("false")
+                            return False
+
+                        self.inserir_pdf_fila(id_arquivo, caminho)
+                        return True
+                    else:
+                        print("NÃO FOI ENCOTNRADO DESENHO DE REFERENCIA")
 
                 except Exception as e:
-                    print("Erro ao pegar cotas:", e)
-
-                self.inserir_pdf_fila(id_arquivo, caminho)
-
-                break
-
-            return True
+                    trata_excecao(e)
+                    return False
 
         except Exception as e:
             trata_excecao(e)
-
-            cursor.execute("""
-                            SELECT ID, NOME_BASE, CAMINHO
-                            FROM ARQUIVOS
-                            WHERE ID = ?
-                        """, (id_arquivo,))
-
-            idw_result = cursor.fetchall()
-            desenho = idw_result[0][1]
-            self.envia_email_desenho_sem_vinculo(idw_result, desenho)
-
             return False
 
     def inserir_pdf_fila(self, id_arquivo, caminho_arquivo):

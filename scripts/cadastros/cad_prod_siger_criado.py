@@ -20,6 +20,7 @@ from core.email_service import dados_email
 class EnviaCadastroProduto:
     def __init__(self):
         self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+
         self.manipula_dados_prod()
 
     def envia_email(self, num_reg, lista):
@@ -39,14 +40,16 @@ class EnviaCadastroProduto:
             msg['Subject'] = subject
 
             linhas_html = ""
-            for item in lista:
-                linhas_html += f"""
-                <tr>
-                    <td>{item['codigo']}</td>
-                    <td>{item['descricao']}</td>
-                    <td>{item['um']}</td>
-                </tr>
-                """
+
+            if lista:
+                for item in lista:
+                    linhas_html += f"""
+                    <tr>
+                        <td>{item['codigo']}</td>
+                        <td>{item['descricao']}</td>
+                        <td>{item['um']}</td>
+                    </tr>
+                    """
 
             html = f"""
             <p>{saudacao}</p>

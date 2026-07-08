@@ -108,7 +108,6 @@ class VerificaPedidos:
             trata_excecao(e)
             raise
 
-
     def manipula_op_aberta(self, cod_prod):
         try:
             qtde_ops = 0
@@ -160,7 +159,7 @@ class VerificaPedidos:
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT oc.data, oc.numero, cli.razao, prodoc.quantidade, prodoc.dataentrega, "
-                           f"COALESCE(prodoc.id_pedido, ''), COALESCE(prodoc.id_expedicao, '') "
+                           f"COALESCE(prodoc.id_pedido, '') "
                            f"FROM PRODUTOORDEMCOMPRA as prodoc "
                            f"INNER JOIN produto as prod ON prodoc.produto = prod.id "
                            f"INNER JOIN ordemcompra as oc ON prodoc.mestre = oc.id "
@@ -173,7 +172,7 @@ class VerificaPedidos:
             dados_ov = cursor.fetchall()
             if dados_ov:
                 for i_ov in dados_ov:
-                    emissao_ov, num_ov, clie_ov, qtde_ov, entrega_ov, num_pi_ov, num_exp = i_ov
+                    emissao_ov, num_ov, clie_ov, qtde_ov, entrega_ov, num_pi_ov = i_ov
 
                     qtde_ov_float = valores_para_float(qtde_ov)
 

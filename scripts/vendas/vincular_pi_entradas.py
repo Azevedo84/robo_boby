@@ -471,7 +471,7 @@ class ExecutaPlanoPcp:
 
             cursor = conecta.cursor()
             cursor.execute(f"SELECT oc.data, oc.numero, cli.razao, prod.id, prodoc.quantidade, prodoc.dataentrega, "
-                           f"COALESCE(prodoc.id_pedido, ''), COALESCE(prodoc.id_expedicao, '') "
+                           f"COALESCE(prodoc.id_pedido, '') "
                            f"FROM PRODUTOORDEMCOMPRA as prodoc "
                            f"INNER JOIN produto as prod ON prodoc.produto = prod.id "
                            f"INNER JOIN ordemcompra as oc ON prodoc.mestre = oc.id "
@@ -484,12 +484,12 @@ class ExecutaPlanoPcp:
             dados_ov = cursor.fetchall()
             if dados_ov:
                 for i_ov in dados_ov:
-                    emissao_ov, num_ov, clie_ov, id_prod, qtde_ov, entrega_ov, num_pi_ov, num_exp = i_ov
+                    emissao_ov, num_ov, clie_ov, id_prod, qtde_ov, entrega_ov, num_pi_ov = i_ov
 
                     emi_ov = f'{emissao_ov.day}/{emissao_ov.month}/{emissao_ov.year}'
                     entreg_ov = f'{entrega_ov.day}/{entrega_ov.month}/{entrega_ov.year}'
 
-                    dados = (num_pi_ov, num_ov, num_exp, emi_ov, clie_ov, id_prod, qtde_ov, entreg_ov)
+                    dados = (num_pi_ov, num_ov, emi_ov, clie_ov, id_prod, qtde_ov, entreg_ov)
                     tabela_nova.append(dados)
 
             return tabela_nova

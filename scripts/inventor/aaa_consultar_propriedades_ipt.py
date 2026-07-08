@@ -1,7 +1,7 @@
 import win32com.client
 
-#arquivo = r"\\publico\c\inventor\24 - corte e solda\24.00.001 - corte e solda\24.00.019.01\24.01.053.05.ipt"
-arquivo = r"\\publico\c\inventor\1 - folha a4\cód. 24 - corte e solda\24.00.001\24.00.019.01\24.01.053.05.idw"
+#arquivo = r"\\publico\c\inventor\18 - extrusora continua\18.00.018.01\18.00.013.01\cb135_1.ipt"
+arquivo = r"\\publico\c\inventor\1 - folha a4\cód. 14 - triangulo\34.02.00 - maq. triangulo dup\11 - 541.00.00 - conj. suporte vertical\541.01.idw"
 
 inventor = None
 doc = None

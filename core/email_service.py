@@ -7,7 +7,7 @@ import smtplib
 def dados_email():
     try:
         email_user = 'ti.ahcmaq@gmail.com'
-        password = "fsno grka ifsq jmzm"
+        password = "eqqv ygpr iwim rxbz"
 
         current_time = (datetime.now())
         horario = current_time.strftime('%H')
@@ -24,7 +24,7 @@ def dados_email():
 
         msg_final = ""
 
-        msg_final += f"Att,\n"
+        msg_final += f"Atenciosamente,\n"
         msg_final += f"Suzuki Máquinas Ltda\n"
         msg_final += f"Fone (51) 3561.2583/(51) 3170.0965\n\n"
         msg_final += f"🟦 Mensagem gerada automaticamente pelo sistema de planejamento e Controle da Produção (PCP) do ERP Suzuki.\n"

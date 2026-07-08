@@ -1,23 +1,16 @@
-import sys
 from core.banco import conecta, conecta_robo
-from core.erros import grava_erro_banco
 from core.conversores import valores_para_float
 import os
-import traceback
-import inspect
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
-from datetime import datetime
-
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-
 from core.erros import trata_excecao
 from core.email_service import dados_email
 
@@ -37,55 +30,6 @@ class EnviaOrdensProducao:
         self.um_prod = ""
         self.num_op = ""
         self.tipo = ""
-
-    def trata_excecao(self, nome_funcao, mensagem, arquivo, excecao):
-        try:
-            tb = traceback.extract_tb(excecao)
-            num_linha_erro = tb[-1][1]
-
-            traceback.print_exc()
-            print(f'Houve um problema no arquivo: {arquivo} na função: "{nome_funcao}"\n{mensagem} {num_linha_erro}')
-
-            grava_erro_banco(nome_funcao, mensagem, arquivo, num_linha_erro)
-
-        except Exception as e:
-            nome_funcao_trat = inspect.currentframe().f_code.co_name
-            exc_traceback = sys.exc_info()[2]
-            tb = traceback.extract_tb(exc_traceback)
-            num_linha_erro = tb[-1][1]
-            print(f'Houve um problema no arquivo: {self.nome_arquivo} na função: "{nome_funcao_trat}"\n'
-                  f'{e} {num_linha_erro}')
-            grava_erro_banco(nome_funcao_trat, e, self.nome_arquivo, num_linha_erro)
-
-    def dados_email(self):
-        try:
-            to = ['<maquinas@unisold.com.br>']
-
-            current_time = (datetime.now())
-            horario = current_time.strftime('%H')
-            hora_int = int(horario)
-            saudacao = ""
-            if 4 < hora_int < 13:
-                saudacao = "Bom Dia!"
-            elif 12 < hora_int < 19:
-                saudacao = "Boa Tarde!"
-            elif hora_int > 18:
-                saudacao = "Boa Noite!"
-            elif hora_int < 5:
-                saudacao = "Boa Noite!"
-
-            msg_final = f"Att,\n" \
-                        f"Suzuki Máquinas Ltda\n" \
-                        f"Fone (51) 3561.2583/(51) 3170.0965\n\n" \
-                        f"Mensagem enviada automaticamente, por favor não responda.\n\n" \
-                        f"Se houver algum problema com o recebimento de emails ou conflitos com o arquivo excel, " \
-                        f"favor entrar em contato pelo email maquinas@unisold.com.br.\n\n"
-
-            return saudacao, msg_final, to
-
-        except Exception as e:
-            trata_excecao(e)
-            raise
 
     def excluir_arquivo(self, caminho_arquivo):
         try:
@@ -399,7 +343,7 @@ class EnviaOrdensProducao:
             server.starttls()
             server.login(email_user, password)
 
-            server.sendmail(email_user, to, text)
+            server.sendmail(email_user, self.destinatario, text)
             attachment.close()
 
             server.quit()
@@ -440,7 +384,7 @@ class EnviaOrdensProducao:
             server.starttls()
             server.login(email_user, password)
 
-            server.sendmail(email_user, to, text)
+            server.sendmail(email_user, self.destinatario, text)
             attachment.close()
 
             server.quit()
@@ -472,7 +416,7 @@ class EnviaOrdensProducao:
             server.starttls()
             server.login(email_user, password)
 
-            server.sendmail(email_user, to, text)
+            server.sendmail(email_user, self.destinatario, text)
 
             server.quit()
 
@@ -504,7 +448,7 @@ class EnviaOrdensProducao:
             server.starttls()
             server.login(email_user, password)
 
-            server.sendmail(email_user, to, text)
+            server.sendmail(email_user, self.destinatario, text)
 
             server.quit()
 
@@ -653,7 +597,7 @@ class EnviaOrdensProducao:
 
     def manipula_comeco(self):
         try:
-            lista = ["8639", "8641", "8636", "8628", "8643", "8690", "8637", "8693",]
+            lista = ["8814", "8825", "8713", "8629", ]
 
             for i in lista:
                 self.num_op = i
