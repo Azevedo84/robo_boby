@@ -18,6 +18,8 @@ class GoogleDriveSync:
 
         self.arquivos_google = {}
 
+        print("teste")
+
     def login(self):
 
         creds = None
