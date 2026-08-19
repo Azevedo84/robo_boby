@@ -1,20 +1,20 @@
 import os
+from core.banco_nuvem import conectar_banco_nuvem
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from google.auth.exceptions import RefreshError
 from datetime import datetime, timezone
 from core.credenciais import pasta_local, pasta_google
+from typing import cast
 
-
-#SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 
 class GoogleDriveSync:
-
     def __init__(self):
         self.service = self.login()
 
@@ -25,6 +25,72 @@ class GoogleDriveSync:
         print(about)
 
         self.arquivos_google = {}
+        self.arquivos_banco = {}
+
+    def carregar_arquivos_banco(self):
+        self.arquivos_banco = {}
+
+        conexao = conectar_banco_nuvem()
+        cursor = conexao.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                ID,
+                TIPO,
+                NOME,
+                EXTENSAO,
+                GOOGLE_FILE_ID
+            FROM ARQUIVOS
+        """)
+
+        for registro in cursor.fetchall():
+            chave = f"{registro['NOME']}.{registro['EXTENSAO']}"
+
+            self.arquivos_banco[chave] = registro
+
+        print(f"BANCO: {len(self.arquivos_banco)} arquivos")
+
+        cursor.close()
+        conexao.close()
+
+    def inserir_arquivo_banco(self, arquivo, cursor):
+        nome = arquivo["name"]
+        google_id = arquivo["id"]
+
+        if "." in nome:
+            nome_sem_ext, extensao = nome.rsplit(".", 1)
+        else:
+            nome_sem_ext = nome
+            extensao = ""
+
+        cursor.execute("""
+            INSERT INTO ARQUIVOS
+            (
+                TIPO,
+                NOME,
+                EXTENSAO,
+                GOOGLE_FILE_ID
+            )
+            VALUES (%s,%s,%s,%s)
+        """, (
+            "PRODUTO",
+            nome_sem_ext,
+            extensao.lower(),
+            google_id
+        ))
+
+        print(f"INSERT ARQUIVO {nome}!")
+
+    def excluir_arquivo_banco(self, registro_banco, cursor):
+
+        cursor.execute("""
+            DELETE FROM ARQUIVOS
+            WHERE ID = %s
+        """, (
+            registro_banco["ID"],
+        ))
+
+        print(f"DELETE ARQUIVO {registro_banco['NOME']}.{registro_banco['EXTENSAO']}!")
 
     def login(self):
 
@@ -39,12 +105,34 @@ class GoogleDriveSync:
         if not creds or not creds.valid:
 
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+
+                try:
+                    creds.refresh(Request())
+
+                except RefreshError as erro:
+                    if "invalid_grant" not in str(erro):
+                        raise
+
+                    if os.path.exists("token.json"):
+                        os.remove("token.json")
+
+                    flow = cast(
+                        InstalledAppFlow,
+                        InstalledAppFlow.from_client_secrets_file(
+                            "credentials.json",
+                            SCOPES
+                        )
+                    )
+
+                    creds = flow.run_local_server(port=0)
 
             else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    "credentials.json",
-                    SCOPES
+                flow = cast(
+                    InstalledAppFlow,
+                    InstalledAppFlow.from_client_secrets_file(
+                        "credentials.json",
+                        SCOPES
+                    )
                 )
 
                 creds = flow.run_local_server(port=0)
@@ -103,8 +191,7 @@ class GoogleDriveSync:
             media_body=media
         ).execute()
 
-    def sincronizar(self):
-
+    def sincronizar_drive(self):
         self.carregar_arquivos_google()
 
         uploads = 0
@@ -169,6 +256,33 @@ class GoogleDriveSync:
         print()
         print(f"Uploads........: {uploads}")
         print(f"Atualizações...: {atualizacoes}")
+
+    def sincronizar_banco(self):
+        self.carregar_arquivos_banco()
+
+        conexao = conectar_banco_nuvem()
+        cursor = conexao.cursor()
+
+        inseridos = 0
+
+        for nome, arquivo in self.arquivos_google.items():
+            if nome not in self.arquivos_banco:
+                self.inserir_arquivo_banco(arquivo, cursor)
+                inseridos += 1
+
+        excluidos = 0
+
+        for nome, registro in self.arquivos_banco.items():
+            if nome not in self.arquivos_google:
+                self.excluir_arquivo_banco(registro, cursor)
+                excluidos += 1
+
+        conexao.commit()
+        cursor.close()
+        conexao.close()
+
+        print(f"Inseridos...: {inseridos}")
+        print(f"Excluídos..: {excluidos}")
 
     def carregar_arquivos_google(self):
 
@@ -251,4 +365,5 @@ if __name__ == "__main__":
 
     drive = GoogleDriveSync()
 
-    drive.sincronizar()
+    drive.sincronizar_drive()
+    drive.sincronizar_banco()

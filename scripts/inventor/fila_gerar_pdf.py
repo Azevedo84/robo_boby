@@ -53,7 +53,7 @@ class GravarPropriedadeInventor:
     def worker_fila(self):
         inventor = None
         try:
-            num_de_arquivos = 100
+            num_de_arquivos = 50
 
             cursor = conecta_engenharia.cursor()
             cursor.execute(f"""
@@ -88,6 +88,7 @@ class GravarPropriedadeInventor:
                             conecta_engenharia.commit()
 
                             print(f"PRODUTO ATUALIZADO COM SUCESSO - SAI DA FILA: {caminho}")
+                            print("\n")
                         else:
                             conecta_engenharia.rollback()
                             print(f"PRODUTO COM PROBLEMAS - FICA NA FILA: {caminho}")
@@ -118,7 +119,7 @@ class GravarPropriedadeInventor:
 
     def processar_arquivo(self, inventor, caminho, nome_base):
         try:
-            print(f"\n📂 Processando: {caminho}")
+            print(f"📂 Processando: {caminho}")
 
             caminho_pdf = rf"\\Publico\C\OP\Projetos\{nome_base}.pdf"
             arquivo_pdf = f"{nome_base}.pdf"

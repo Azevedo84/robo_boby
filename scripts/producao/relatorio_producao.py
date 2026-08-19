@@ -27,7 +27,7 @@ from datetime import datetime
 class PcpPrevisao:
     def __init__(self):
 
-        self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         print(datetime.today().weekday())
 

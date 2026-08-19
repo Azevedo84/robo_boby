@@ -9,13 +9,16 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 
-from core.banco import conecta
+from core.banco import conecta, conecta_engenharia
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
 from core.erros import trata_excecao
 from core.email_service import dados_email
+
+from core.inventor import padrao_desenho
+import re
 
 
 class LancaItensEstrutura:
@@ -154,7 +157,80 @@ class LancaItensEstrutura:
             if nova_lista_sem_tipo:
                 self.envia_email_sem_tipo(nova_lista_sem_tipo)
             if lista_sem_desenho_pdf:
+                self.processar_arquivos_inventor(lista_sem_desenho_pdf)
                 self.envia_email_sem_desenho_pdf(lista_sem_desenho_pdf)
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def tratar_referencia(self, obs):
+        try:
+            if not obs:
+                return None
+
+            match = padrao_desenho.search(obs)
+
+            if not match:
+                return None
+
+            s = re.sub(r"[^\d.]", "", obs)
+            s = re.sub(r"\.+$", "", s)
+
+            return s if s else None
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def processar_arquivos_inventor(self, registros):
+        try:
+            print(f"📦 Total pedidos ativos: {len(registros)}")
+
+            for codigo, descricao, obs in registros:
+                ref = self.tratar_referencia(obs)
+
+                if not ref:
+                    continue
+
+                cursor_eng = conecta_engenharia.cursor()
+                cursor_eng.execute("""
+                    SELECT ID, TIPO_ARQUIVO
+                    FROM ARQUIVOS
+                    WHERE NOME_BASE = ?
+                      AND TIPO_ARQUIVO IN ('IPT', 'IAM')
+                """, (ref,))
+                resultados = cursor_eng.fetchall()
+
+                if not resultados or len(resultados) > 1:
+                    continue
+
+                id_arquivo, tipo = resultados[0]
+
+                self.inserir_fila_conferencia(id_arquivo)
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def inserir_fila_conferencia(self, id_arquivo):
+        try:
+            cursor = conecta_engenharia.cursor()
+            cursor.execute("""
+                SELECT 1 FROM FILA_CONFERENCIA WHERE ID_ARQUIVO=?
+            """, (id_arquivo,))
+
+            if cursor.fetchone():
+                return
+
+            cursor.execute("""
+                INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+                VALUES (?, ?)
+            """, (id_arquivo, "ALTERADOS"))
+
+            print(f"INSERIDO DA FILA DE CONFERENCIA: {id_arquivo}")
+
+            conecta_engenharia.commit()
 
         except Exception as e:
             trata_excecao(e)

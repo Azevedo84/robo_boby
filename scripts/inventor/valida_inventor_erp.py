@@ -271,7 +271,7 @@ class GerarFilaValidacaoERP:
             trata_excecao(e)
             raise
 
-    def tratar_referencia(self, codigo, descricao, obs):
+    def tratar_referencia(self, obs):
         try:
             if not obs:
                 return None
@@ -357,7 +357,7 @@ class GerarFilaValidacaoERP:
             print(f"📦 Total pedidos ativos: {len(registros)}")
 
             for codigo, descricao, obs, conj in registros:
-                ref = self.tratar_referencia(codigo, descricao, obs)
+                ref = self.tratar_referencia(obs)
 
                 if not ref:
                     continue
@@ -368,7 +368,6 @@ class GerarFilaValidacaoERP:
                     WHERE NOME_BASE = ?
                       AND TIPO_ARQUIVO IN ('IPT', 'IAM')
                 """, (ref,))
-
                 resultados = cursor_eng.fetchall()
 
                 if not resultados or len(resultados) > 1:
@@ -1802,7 +1801,7 @@ class GerarFilaValidacaoERP:
                 cursor.execute(sql, (id_arquivo,)) # ✅ AQUI TAMBÉM
                 conecta_engenharia.commit()
 
-                print("Produto inserido na fila de PDF!", caminho_arquivo)
+                print(" AAAAAAAAAAAAAAAAAAAAA Produto inserido na fila de PDF!", caminho_arquivo)
 
         except Exception as e:
             trata_excecao(e)

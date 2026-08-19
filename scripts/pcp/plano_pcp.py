@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 
-from core.banco import conecta, conecta_robo
+from core.banco import conecta, conecta_robo, conecta_engenharia
 from core.conversores import valores_para_float
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -32,6 +32,8 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import Side, Alignment, Border, Font
 import shutil
+
+from core.inventor import padrao_desenho
 
 
 class ExecutaPlanoPcp:
@@ -261,6 +263,75 @@ class ExecutaPlanoPcp:
             trata_excecao(e)
             raise
 
+    def tratar_referencia(self, obs):
+        try:
+            if not obs:
+                return None
+
+            match = padrao_desenho.search(obs)
+
+            if not match:
+                return None
+
+            s = re.sub(r"[^\d.]", "", obs)
+            s = re.sub(r"\.+$", "", s)
+
+            return s if s else None
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def processar_arquivos_inventor(self, obs, cod):
+        try:
+            ref = self.tratar_referencia(obs)
+
+            if ref:
+                cursor_eng = conecta_engenharia.cursor()
+                cursor_eng.execute("""
+                                   SELECT ID, TIPO_ARQUIVO
+                                   FROM ARQUIVOS
+                                   WHERE NOME_BASE = ?
+                                     AND TIPO_ARQUIVO IN ('IPT', 'IAM')
+                                   """, (ref,))
+                resultados = cursor_eng.fetchall()
+
+                if resultados or len(resultados) == 1:
+                    id_arquivo, tipo = resultados[0]
+
+                    self.inserir_fila_conferencia(id_arquivo)
+                else:
+                    self.envia_email_nao_acha_desenho(obs, cod)
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def inserir_fila_conferencia(self, id_arquivo):
+        try:
+            cursor = conecta_engenharia.cursor()
+            cursor.execute("""
+                           SELECT 1
+                           FROM FILA_CONFERENCIA
+                           WHERE ID_ARQUIVO = ?
+                           """, (id_arquivo,))
+
+            if cursor.fetchone():
+                return
+
+            cursor.execute("""
+                           INSERT INTO FILA_CONFERENCIA (ID_ARQUIVO, ORIGEM)
+                           VALUES (?, ?)
+                           """, (id_arquivo, "PCP"))
+
+            print(f"INSERIDO DA FILA DE CONFERENCIA: {id_arquivo}")
+
+            conecta_engenharia.commit()
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
     def inicio_de_tudo_pi_abertas(self):
         try:
             lista_final = []
@@ -297,7 +368,7 @@ class ExecutaPlanoPcp:
                         self.envia_email_desenho_duplicado(cod, ref)
                     else:
                         if prod_sem_des:
-                            self.envia_email_nao_acha_desenho(ref, cod)
+                            self.processar_arquivos_inventor(ref, cod)
                         else:
                             if prod_sem_estrut:
                                 s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
@@ -309,7 +380,7 @@ class ExecutaPlanoPcp:
                                 if os.path.exists(caminho_pdf):
                                     self.envia_email_sem_estrutura(caminho_pdf, arquivo_pdf, i)
                                 else:
-                                    self.envia_email_nao_acha_desenho(arquivo_pdf, cod)
+                                    self.processar_arquivos_inventor(ref, cod)
                             else:
                                 if qtde_nec > 0:
                                     qtde_nec_f += qtde_nec
@@ -327,7 +398,7 @@ class ExecutaPlanoPcp:
                                                 self.envia_email_desenho_duplicado(cod, ref)
                                             else:
                                                 if prod_sem_des_f:
-                                                    self.envia_email_nao_acha_desenho(ref_f, cod_f)
+                                                    self.processar_arquivos_inventor(ref_f, cod_f)
                                                 else:
                                                     if prod_sem_estr_f:
                                                         s_f = re.sub(r"[^\d.]", "", ref_f)
@@ -339,7 +410,7 @@ class ExecutaPlanoPcp:
                                                         if os.path.exists(caminho_pdf_f):
                                                             self.envia_email_sem_estrutura(caminho_pdf_f, arquivo_pdf_f, ii)
                                                         else:
-                                                            self.envia_email_nao_acha_desenho(arquivo_pdf_f, cod_f)
+                                                            self.processar_arquivos_inventor(ref_f, cod_f)
                                                     else:
                                                         if qtde_nec_f > 0:
                                                             if num_tipo_f != 80:
@@ -390,7 +461,7 @@ class ExecutaPlanoPcp:
                         self.envia_email_desenho_duplicado(cod, ref)
                     else:
                         if prod_sem_des:
-                            self.envia_email_nao_acha_desenho(ref, cod)
+                            self.processar_arquivos_inventor(ref, cod)
                         else:
                             if prod_sem_estrut:
                                 s = re.sub(r"[^\d.]", "", ref)  # remove tudo que não é número ou ponto
@@ -402,7 +473,7 @@ class ExecutaPlanoPcp:
                                 if os.path.exists(caminho_pdf):
                                     self.envia_email_sem_estrutura(caminho_pdf, arquivo_pdf, i)
                                 else:
-                                    self.envia_email_nao_acha_desenho(arquivo_pdf, cod)
+                                    self.processar_arquivos_inventor(ref, cod)
                             else:
                                 if qtde_nec > 0:
                                     qtde_nec_f += qtde_nec
@@ -420,7 +491,7 @@ class ExecutaPlanoPcp:
                                                 self.envia_email_desenho_duplicado(cod, ref)
                                             else:
                                                 if prod_sem_des_f:
-                                                    self.envia_email_nao_acha_desenho(ref_f, cod_f)
+                                                    self.processar_arquivos_inventor(ref_f, cod_f)
                                                 else:
                                                     if prod_sem_estr_f:
                                                         s_f = re.sub(r"[^\d.]", "", ref_f)
@@ -432,7 +503,7 @@ class ExecutaPlanoPcp:
                                                         if os.path.exists(caminho_pdf_f):
                                                             self.envia_email_sem_estrutura(caminho_pdf_f, arquivo_pdf_f, ii)
                                                         else:
-                                                            self.envia_email_nao_acha_desenho(arquivo_pdf_f, cod_f)
+                                                            self.processar_arquivos_inventor(ref_f, cod_f)
                                                     else:
                                                         if qtde_nec_f > 0:
                                                             if num_tipo_f != 80:
@@ -554,7 +625,7 @@ class ExecutaPlanoPcp:
                                         for titi in desenhos_faltando:
                                             ref, cod = titi
 
-                                            self.envia_email_nao_acha_desenho(ref, cod)
+                                            self.processar_arquivos_inventor(ref, cod)
                             else:
                                 lista_nao_enviado_orcamento = []
 
@@ -593,7 +664,7 @@ class ExecutaPlanoPcp:
                                         for titi in desenhos_faltando:
                                             ref, cod = titi
 
-                                            self.envia_email_nao_acha_desenho(ref, cod)
+                                            self.processar_arquivos_inventor(ref, cod)
                                 else:
                                     todos_tem_desenho = True
                                     desenhos_faltando = []
@@ -614,7 +685,7 @@ class ExecutaPlanoPcp:
                                         for titi in desenhos_faltando:
                                             ref, cod = titi
 
-                                            self.envia_email_nao_acha_desenho(ref, cod)
+                                            self.processar_arquivos_inventor(ref, cod)
                             else:
                                 self.solicitacao_sem_desenho(tipo, itens)
         except Exception as e:
@@ -775,7 +846,7 @@ class ExecutaPlanoPcp:
             server.starttls()
             server.login(email_user, password)
 
-            destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+            destinatario = ['<maquinas@unisold.com.br>']
 
             server.sendmail(email_user, destinatario, text)
             attachment.close()
@@ -823,7 +894,7 @@ class ExecutaPlanoPcp:
             server.starttls()
             server.login(email_user, password)
 
-            destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+            destinatario = ['<maquinas@unisold.com.br>']
 
             server.sendmail(email_user, destinatario, text)
             attachment.close()

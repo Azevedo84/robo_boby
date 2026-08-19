@@ -25,7 +25,7 @@ from core.email_service import dados_email
 
 class SepararOVS:
     def __init__(self):
-        self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.manipula_comeco()
 

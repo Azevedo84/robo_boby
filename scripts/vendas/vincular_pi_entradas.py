@@ -162,7 +162,7 @@ class ExecutaPlanoPcp:
 
                     if vincular_pedido_interno:
                         for item in vincular_pedido_interno:
-                            num_pi, num_ov, num_exp, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
+                            num_pi, num_ov, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
 
                             dados = ("OP", num_op, cod, descr, ref, um, num_pi, id_prod_pi)
                             lista_final.append(dados)
@@ -218,7 +218,7 @@ class ExecutaPlanoPcp:
 
                     if vincular_pedido_interno:
                         for item in vincular_pedido_interno:
-                            num_pi, num_ov, num_exp, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
+                            num_pi, num_ov, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
 
                             dados = ("SOL", num_sol_i, cod_prod_i, descr, ref, um, num_pi, id_prod_pi)
                             lista_final.append(dados)
@@ -274,7 +274,7 @@ class ExecutaPlanoPcp:
 
                     if vincular_pedido_interno:
                         for item in vincular_pedido_interno:
-                            num_pi, num_ov, num_exp, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
+                            num_pi, num_ov, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
 
                             dados = ("REQ", num_req_i, cod_prod_i, descr, ref, um, num_pi, id_prod_pi)
                             lista_final.append(dados)
@@ -336,7 +336,7 @@ class ExecutaPlanoPcp:
 
                     if vincular_pedido_interno:
                         for item in vincular_pedido_interno:
-                            num_pi, num_ov, num_exp, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
+                            num_pi, num_ov, emi_ov, clie_ov, id_prod_pi, qtde_ov, entreg_ov = item
 
                             dados = ("OC", num_oc_i, cod_prod_i, descr, ref, um, num_pi, id_prod_pi)
                             lista_final.append(dados)
@@ -466,7 +466,7 @@ class ExecutaPlanoPcp:
                     emi_pi = f'{emissao_pi.day}/{emissao_pi.month}/{emissao_pi.year}'
                     entreg_pi = f'{entrega_pi.day}/{entrega_pi.month}/{entrega_pi.year}'
 
-                    dados_pi = (num_pi, "", "", emi_pi, clie_pi, id_prod, qtde_pi, entreg_pi)
+                    dados_pi = (num_pi, "", emi_pi, clie_pi, id_prod, qtde_pi, entreg_pi)
                     tabela_nova.append(dados_pi)
 
             cursor = conecta.cursor()

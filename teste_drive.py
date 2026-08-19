@@ -11,9 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-
-ID_PDF = "1y9Nab-j3GWFIBzEOLieo_nwKSmR3HsB5"
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 
 class Janela(QWidget):
@@ -29,10 +27,11 @@ class Janela(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.label)
 
-        self.mostrar_pdf()
+        id_pdf = "11AotqP30qRAe8jJ54iTRZrOv71fulqxI"
 
+        self.mostrar_pdf(id_pdf)
 
-    def mostrar_pdf(self):
+    def mostrar_pdf(self, id_pdf):
 
         creds = Credentials.from_authorized_user_file(
             "token.json",
@@ -45,16 +44,40 @@ class Janela(QWidget):
             credentials=creds
         )
 
-        request = service.files().get_media(
-            fileId=ID_PDF
-        )
+        arquivos = {}
+
+        while True:
+
+            resultado = service.files().list(
+                q="name='01 - 9.01.09.pdf' and trashed=false",
+                fields="files(id,name)"
+            ).execute()
+
+            print(resultado)
+
+            for arquivo in resultado.get("files", []):
+                arquivos[arquivo["name"]] = arquivo
+
+            pagina = resultado.get("nextPageToken")
+
+            if not pagina:
+                break
+
+        print(f"Total: {len(arquivos)}")
+
+        nome = "01 - 9.01.09.pdf"
+
+        if nome not in arquivos:
+            print("NÃO ENCONTROU")
+            return
+
+        id_pdf = arquivos[nome]["id"]
+
+        request = service.files().get_media(fileId=id_pdf)
 
         buffer = io.BytesIO()
 
-        downloader = MediaIoBaseDownload(
-            buffer,
-            request
-        )
+        downloader = MediaIoBaseDownload(buffer, request)
 
         concluido = False
 
@@ -86,7 +109,6 @@ class Janela(QWidget):
 
         self.label.setPixmap(pixmap)
         self.label.setScaledContents(True)
-
 
 app = QApplication(sys.argv)
 

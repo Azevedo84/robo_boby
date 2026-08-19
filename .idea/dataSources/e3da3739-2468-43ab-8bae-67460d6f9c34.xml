@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <dataSource name="ESTOQUE.GDB@PUBLICO">
-  <database-model serializer="dbm" dbms="FIREBIRD" family-id="FIREBIRD" format-version="4.54">
+  <database-model serializer="dbm" dbms="FIREBIRD" family-id="FIREBIRD" format-version="4.55">
     <root id="1">
       <Dbms>FIREBIRD</Dbms>
       <DefaultCasing>upper</DefaultCasing>
@@ -3470,8 +3470,8 @@ ID_PEDIDOINTERNO</ColNames>
     <index id="912" parent="62" name="RDB$INDEX_44">
       <ColNames>RDB$BACKUP_LEVEL
 RDB$BACKUP_ID</ColNames>
-      <ReverseColNames>RDB$BACKUP_LEVEL
-RDB$BACKUP_ID</ReverseColNames>
+      <ReverseColNames>RDB$BACKUP_ID
+RDB$BACKUP_LEVEL</ReverseColNames>
       <Unique>1</Unique>
     </index>
     <key id="913" parent="62" name="RDB$INDEX_44">

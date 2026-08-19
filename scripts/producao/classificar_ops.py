@@ -30,7 +30,7 @@ from email import encoders
 
 class ClassificarOps:
     def __init__(self):
-        self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
         self.manipula_comeco()
 

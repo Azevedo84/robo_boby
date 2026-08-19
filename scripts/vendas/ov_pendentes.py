@@ -74,7 +74,7 @@ bc_ander = BancoAnder()
 
 class EnviaOrdensVendaPendentes:
     def __init__(self):
-        self.destinatario = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+        self.destinatario = ['<maquinas@unisold.com.br>']
 
     def envia_email(self, num_oc, data_entrego, fornecedore, dados_banco):
         try:

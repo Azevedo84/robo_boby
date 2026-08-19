@@ -338,7 +338,7 @@ class PcpPrevisao:
         try:
             saudacao, msg_final, email_user, password = dados_email()
 
-            to = ['<maquinas@unisold.com.br>', '<ahcmaquinas@gmail.com>']
+            to = ['<maquinas@unisold.com.br>']
 
             subject = f'Relatório Diário Produção'
 

@@ -17,6 +17,10 @@ from datetime import datetime, date, timedelta
 from core.erros import trata_excecao
 from core.email_service import dados_email
 
+from email.mime.base import MIMEBase
+from email.header import Header
+from email import encoders
+
 
 class BancoAnder:
     def __init__(self):
@@ -169,6 +173,89 @@ class EnviaOrdensCompraPendentes:
 
             conecta.commit()
 
+            print("email oc pendente atrasada!")
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def localizar_arquivos_nf(self, numero_nf, data_emissao):
+        try:
+            if isinstance(data_emissao, str):
+                data_emissao = datetime.fromisoformat(data_emissao)
+
+            ano = data_emissao.strftime("%Y")
+            mes = data_emissao.strftime("%m")
+            dia = data_emissao.strftime("%d")
+
+            base_path = r"\\Publico\g\Pasta Scanner Backup\xml"
+
+            pasta = os.path.join(base_path, ano, mes, dia)
+
+            caminho_xml = os.path.join(pasta, f"{numero_nf}.xml")
+            caminho_pdf = os.path.join(pasta, f"{numero_nf}.pdf")
+
+            arquivos = {
+                "xml": caminho_xml if os.path.exists(caminho_xml) else None,
+                "pdf": caminho_pdf if os.path.exists(caminho_pdf) else None
+            }
+
+            return arquivos
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def envia_email_nf_atrasada(self, numero_nf, data_emissao, fornecedor, dias):
+        try:
+            saudacao, msg_final, email_user, password = dados_email()
+
+            subject = f'NF {numero_nf} - {fornecedor} atrasada {dias} dias'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['To'] = ", ".join(self.destinatario)
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\n"
+
+            body += f"NF {numero_nf} - {fornecedor} atrasada {dias} dias\n\n"
+
+            body += "\n" + msg_final
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            # 🔎 Localiza arquivos no servidor
+            arquivos = self.localizar_arquivos_nf(numero_nf, data_emissao)
+
+            # 📎 Anexa XML e PDF se existirem
+            for tipo, caminho in arquivos.items():
+                if caminho:
+                    with open(caminho, 'rb') as attachment:
+                        part = MIMEBase('application', "octet-stream")
+                        part.set_payload(attachment.read())
+                        encoders.encode_base64(part)
+
+                        nome_arquivo = os.path.basename(caminho)
+
+                        part.add_header(
+                            'Content-Disposition',
+                            'attachment',
+                            filename=Header(nome_arquivo, 'utf-8').encode()
+                        )
+
+                        msg.attach(part)
+
+            # 🚀 Envia email
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, self.destinatario, msg.as_string())
+            server.quit()
+
+            print("Email NF atrasada enviado com sucesso!")
+
         except Exception as e:
             trata_excecao(e)
             raise
@@ -274,11 +361,54 @@ class EnviaOrdensCompraPendentes:
 
             dados_user = bc_ander.consultar('tab_ordens')
             for didos in dados_user:
-                print(didos)
                 num_orc = didos['Número OC']
                 data_entr = didos['Data Entrega']
                 forne = didos['Fornecedor']
-                self.envia_email(num_orc, data_entr, forne, bc_ander)
+
+                cursor_oc = conecta.cursor()
+                cursor_oc.execute("""
+                                SELECT prodoc.ID, prodoc.QUANTIDADE
+                                FROM ordemcompra oc
+                                INNER JOIN produtoordemcompra prodoc ON oc.id = prodoc.mestre
+                                WHERE oc.entradasaida = 'E'
+                                AND oc.STATUS = 'A'
+                                AND oc.numero = ?
+                                """, (num_orc,))
+                dados_oc = cursor_oc.fetchall()
+
+                if dados_oc:
+                    for ii in dados_oc:
+                        id_prod_oc, qtde_prod_oc = ii
+
+                        cursor = conecta.cursor()
+                        cursor.execute("""
+                                        SELECT nf.NUMERO_NF, nf.DATA_EMISSAO, vinc.ID_PRODUTO_OC, FORN.RAZAO, FORN.ESTADO
+                                        FROM PRE_NF_OC_VINCULO as vinc
+                                        INNER JOIN PRE_NF_ENTRADA as nf ON vinc.ID_NF_PRE = nf.id
+                                        INNER JOIN FORNECEDORES as forn ON nf.ID_FORNECEDOR = forn.id
+                                        WHERE vinc.ID_PRODUTO_OC = ?
+                                    """, (id_prod_oc,))
+                        dados_nf = cursor.fetchall()
+                        print(id_prod_oc, dados_nf)
+                        if dados_nf:
+                            for iii in dados_nf:
+                                num_nf, data_emissao_nf, id_prod_nf, fornecedor, estado = iii
+                                print(num_nf, data_emissao_nf, id_prod_nf, fornecedor, estado)
+
+                                hoje = date.today()
+                                dias = (hoje - data_emissao_nf).days
+
+                                if estado == "RS":
+                                    limite = 2
+                                else:
+                                    limite = 7
+
+                                if dias > limite:
+                                    print(hoje, data_emissao_nf, dias, limite)
+                                    print(f"NF {num_nf} atrasada ({dias} dias)")
+                                    self.envia_email_nf_atrasada(num_nf, data_emissao_nf, fornecedor, dias)
+                        else:
+                            self.envia_email(num_orc, data_entr, forne, bc_ander)
 
         except Exception as e:
             trata_excecao(e)

@@ -693,11 +693,18 @@ class ManipularEmailOC:
 
             for item_txt in itens_brutos:
 
-                print("\nITEM ORIGINAL:")
+                print("ITEM ORIGINAL:")
                 print(item_txt)
 
+                # Corrige PDFs da Suzuki onde a referência fica grudada no código
+                item_txt = re.sub(
+                    r'(\d{12})(\d{4,6})\b',
+                    r'\1 \2',
+                    item_txt
+                )
+
                 # =========================
-                # 🔧 NORMALIZAÇÃO (CORREÇÃO PRINCIPAL)
+                # 🔧 NORMALIZAÇÃO
                 # =========================
                 item_txt = item_txt.replace("\n", " ")
                 item_txt = re.sub(r'\s+', ' ', item_txt)

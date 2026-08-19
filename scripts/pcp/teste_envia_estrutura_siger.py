@@ -54,7 +54,6 @@ def processar_estoque_excel():
     for row in ws.iter_rows(min_row=2, values_only=True):
         codigo = str(row[0]).strip()
 
-        # 🔎 busca produto
         cursor.execute("""
             SELECT id, codigo, descricao, unidade, conjunto
             FROM produto

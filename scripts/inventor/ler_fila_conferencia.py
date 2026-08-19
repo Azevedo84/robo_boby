@@ -388,11 +388,10 @@ class WorkerFilaConferencia:
         try:
             if "\\inventor\\biblioteca" not in caminho:
                 cursor.execute("""
-                    SELECT ID_ARQUIVO, ID_ARQUIVO_REFERENCIA
-                    FROM PROPRIEDADES_IDW
-                    WHERE ID_ARQUIVO_REFERENCIA = ?
+                    SELECT ID, TIPO_ARQUIVO
+                    FROM ARQUIVOS
+                    WHERE ID = ? and TIPO_ARQUIVO = 'IDW'
                 """, (id_arquivo,))
-
                 dados_idw = cursor.fetchall()
 
                 if dados_idw:
@@ -400,6 +399,10 @@ class WorkerFilaConferencia:
                         id_arq, id_arq_ref = i
 
                         self.inserir_fila_conferencia(cursor, id_arq)
+                else:
+                    print("SEM IDW!!!")
+                    dados = (3, id_arquivo, "")
+                    self.insert_divergencia(dados)
 
         except Exception as e:
             trata_excecao(e)
@@ -461,7 +464,7 @@ class WorkerFilaConferencia:
 
                 for id_arquivo, origem, caminho, nome_base in fila:
                     print("\n")
-                    print(f"🔍 Abrindo: {caminho}")
+                    print(f"🔍 {id_arquivo} Abrindo: {caminho}")
 
                     doc = None
 
