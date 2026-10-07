@@ -1,16 +1,29 @@
-import os
-from twilio.rest import Client
+import requests
 
-ACCOUNT_SID = os.environ["TWILIO_ACCOUNT_SID"]
-AUTH_TOKEN = os.environ["TWILIO_AUTH_TOKEN"]
+TOKEN = "EAATz4ltDrooBSVmzxPqV6g2XNJUE02OzB9zmNfPGuO8Oe4vAtjSe0ybSFS7HotiKxxfTsWOhFgvzRCVdb6uX0XCoTWSZA1lGKhXjQvAr31xf7eXZCxFNnYFWUAuwegOfeuwnZCV5BNNiE6XSdvx3mOUPMiyxHZC4Qhw2nE9fnHb7qWZCFcd5hCZCuOVbAnweVrzlNIU0focq4BWzFEvTeCsBwUWP9nFoReTvn5tAF7XguqAGU8qvBKklQ2jrZCYhuDuZAyRmxdZCnZA553onq20m8q"
+PHONE_NUMBER_ID = "1256537490880143"
+NUMERO_DESTINO = "5551981158315"
 
-client = Client(ACCOUNT_SID, AUTH_TOKEN)
+url = f"https://graph.facebook.com/v26.0/{PHONE_NUMBER_ID}/messages"
 
-message = client.messages.create(
-    from_="whatsapp:+14155238886",
-    to="whatsapp:+55SEUNUMERO",
-    body="Olá! 🚀 Esta mensagem foi enviada pelo Python."
-)
+headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Content-Type": "application/json"
+}
 
-print("Mensagem enviada!")
-print("SID:", message.sid)
+dados = {
+    "messaging_product": "whatsapp",
+    "to": NUMERO_DESTINO,
+    "type": "template",
+    "template": {
+        "name": "hello_world",
+        "language": {
+            "code": "en_US"
+        }
+    }
+}
+
+resposta = requests.post(url, headers=headers, json=dados)
+
+print("Status:", resposta.status_code)
+print("Resposta:", resposta.json())

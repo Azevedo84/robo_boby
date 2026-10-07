@@ -369,7 +369,7 @@ class ConfereDivergencias:
                 resultado_final = True
             else:
                 if id_arquivo == id_verificar:
-                    print("\nDiferenças encontradas:\n")
+                    print("\nDiferenças encontradas:")
 
                     somente_novo = contador_novo - contador_erp
                     somente_erp = contador_erp - contador_novo
@@ -711,6 +711,44 @@ class ConfereDivergencias:
                 return True
 
             return False
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def consulta_fantasma(self, id_arquivo, tipo_arq):
+        try:
+            tem_campo = False
+
+            est_item = ""
+
+            cursor_eng = conecta_engenharia.cursor()
+            if tipo_arq == "IPT":
+                cursor_eng.execute("""
+                                    SELECT ipt.id_arquivo, ipt.AUTHORITY, COALESCE(ipt.STOCK_NUMBER, '')
+                                    FROM PROPRIEDADES_IPT ipt
+                                    where ipt.id_arquivo = ?
+                                    """, (id_arquivo,))
+                dados_ipt = cursor_eng.fetchall()
+                if dados_ipt:
+                    for i in dados_ipt:
+                        est_item = i[2].strip()
+            else:
+                cursor_eng.execute("""
+                                    SELECT iam.id_arquivo, iam.AUTHORITY, COALESCE(iam.STOCK_NUMBER, '')
+                                    FROM PROPRIEDADES_IAM iam
+                                    where iam.id_arquivo = ?
+                                    """, (id_arquivo,))
+                dados_iam = cursor_eng.fetchall()
+
+                if dados_iam:
+                    for ii in dados_iam:
+                        est_item = ii[2].strip()
+
+            if est_item == "FANTASMA":
+                tem_campo = True
+
+            return tem_campo
 
         except Exception as e:
             trata_excecao(e)
@@ -1230,7 +1268,6 @@ class ConfereDivergencias:
                     for tiitii in dados_iam_cod:
                         lista_final.append(tiitii)
 
-
             if len(lista_final) == 1 or not lista_final:
                 tem_campo = True
 
@@ -1304,6 +1341,8 @@ class ConfereDivergencias:
                 if dados_ipt:
                     for i in dados_ipt:
                         cod_eng = i[1].strip()
+
+                    estrutura_eng = self.consulta_estrutura_eng_atual(id_arquivo)
             else:
                 cursor_eng.execute("""
                                     SELECT iam.id_arquivo, iam.COST_CENTER, COALESCE(iam.STOCK_NUMBER, '')
@@ -1315,6 +1354,12 @@ class ConfereDivergencias:
                 if dados_iam:
                     for ii in dados_iam:
                         cod_eng = ii[1].strip()
+
+                    estrutura_eng = self.consulta_estrutura_eng_atual(id_arquivo)
+
+            if estrutura_eng:
+                if len(estrutura_eng) > 1:
+                    tem_campo = True
 
             if cod_eng:
                 cursor_erp = conecta.cursor()
@@ -1483,7 +1528,7 @@ class ConfereDivergencias:
 
     def consulta_estruturas_18(self, id_arquivo, obs_div, tipo_arq):
         try:
-            id_verificar = 1
+            id_verificar = 0
 
             tem_campo = False
 
@@ -1888,10 +1933,8 @@ class ConfereDivergencias:
                     cur = conecta_engenharia.cursor()
                     cur.execute(sql, (id_arq,))
                     dados_divergencias = cur.fetchall()
-                    if not dados_divergencias:
-                        hoje = date.today()
-
-                        if qtde and id_cliente and solicitante and obs and data_entrega and data_entrega > hoje:
+                    if dados_divergencias:
+                        if qtde and id_cliente and solicitante and obs and data_entrega:
                             cursor = conecta.cursor()
                             cursor.execute(f"select id, razao "
                                            f"from clientes "
@@ -1912,8 +1955,7 @@ class ConfereDivergencias:
             tem_campo = False
 
             cod_eng = ""
-
-            print(id_arquivo, tipo_arq)
+            est_item = ""
 
             cursor_eng = conecta_engenharia.cursor()
             if tipo_arq == "IPT":
@@ -1923,10 +1965,10 @@ class ConfereDivergencias:
                                                 where ipt.id_arquivo = ?
                                                 """, (id_arquivo,))
                 dados_ipt = cursor_eng.fetchall()
-                print(dados_ipt)
                 if dados_ipt:
                     for i in dados_ipt:
                         cod_eng = i[1].strip()
+                        est_item = i[2].strip()
             else:
                 cursor_eng.execute("""
                                                 SELECT iam.id_arquivo, iam.AUTHORITY, COALESCE(iam.STOCK_NUMBER, '')
@@ -1936,9 +1978,12 @@ class ConfereDivergencias:
                 dados_iam = cursor_eng.fetchall()
 
                 if dados_iam:
-                    print(dados_iam)
                     for ii in dados_iam:
                         cod_eng = ii[1].strip()
+                        est_item = ii[2].strip()
+
+            if est_item == "FANTASMA":
+                tem_campo = True
 
             if cod_eng:
                 tem_campo = True
@@ -1994,10 +2039,10 @@ class ConfereDivergencias:
             cur.execute(sql)
             dados_divergencias = cur.fetchall()
 
-            tem_campo = False
-
             if dados_divergencias:
                 for i in dados_divergencias:
+                    tem_campo = False
+
                     id_div, id_tipo_div, id_arquivo, nome_base, tipo_arq, descr_div, obs_div, caminho, classifica, resolvido = i
 
                     if id_tipo_div != 1 and id_tipo_div != 11 and id_tipo_div != 21 and id_tipo_div != 19:
@@ -2008,6 +2053,10 @@ class ConfereDivergencias:
 
                             self.delete_divergencia(id_div, id_tipo_div)
                             continue
+
+                    tem_campo_f = self.consulta_fantasma(id_arquivo, tipo_arq)
+                    if tem_campo_f:
+                        self.delete_divergencia(id_div, id_tipo_div)
 
                     if id_tipo_div == 1:
                         tem_campo = self.consulta_duplicados_01(tipo_arq, nome_base)

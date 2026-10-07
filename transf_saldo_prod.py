@@ -7,9 +7,9 @@ import re
 # CONFIGURAÇÃO
 # ============================================================
 
-ARQUIVO_EXCEL = r"C:\Users\Anderson\Desktop\Cópia de Saldo Almox MAQ.xlsx"
+ARQUIVO_EXCEL = r"C:\Users\Anderson\Desktop\Saldo_Almox.xlsx"
 
-DATA_MOVIMENTO = "2026-08-07"
+DATA_MOVIMENTO = "2026-10-05"
 
 PRODUTO_SUCATA = 26186
 CODIGO_SUCATA = 56391

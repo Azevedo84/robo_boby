@@ -10,7 +10,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 
 import win32com.client
-from core.banco import conecta_engenharia
+from core.banco import conecta_engenharia, conecta
 from core.erros import trata_excecao
 from core.email_service import dados_email
 from core.inventor import definir_classificacao
@@ -384,7 +384,25 @@ class WorkerFilaConferencia:
             trata_excecao(e)
             raise
 
-    def consulta_idw_colocar_na_fila(self, cursor, id_arquivo, caminho):
+    def consulta_codigo_prod_erp(self, codigo):
+        try:
+            cursor_erp = conecta.cursor()
+            cursor_erp.execute("""
+                            SELECT prod.id, prod.descricao, COALESCE(prod.obs, ''), prod.unidade, 
+                            prod.id_versao, prod.KILOSMETRO, prod.conjunto, tip.DESENHO, prod.ID_SERVICO_INTERNO  
+                            FROM produto as prod 
+                            LEFT JOIN tipomaterial tip ON prod.tipomaterial = tip.id
+                            where prod.codigo = ?
+                            """, (codigo,))
+            produto = cursor_erp.fetchall()
+
+            return produto or []
+
+        except Exception as e:
+            trata_excecao(e)
+            raise
+
+    def consulta_idw_colocar_na_fila(self, cursor, id_arquivo, caminho, codigo):
         try:
             if "\\inventor\\biblioteca" not in caminho:
                 cursor.execute("""
@@ -400,9 +418,16 @@ class WorkerFilaConferencia:
 
                         self.inserir_fila_conferencia(cursor, id_arq)
                 else:
-                    print("SEM IDW!!!")
-                    dados = (3, id_arquivo, "")
-                    self.insert_divergencia(dados)
+                    dados_cod = self.consulta_codigo_prod_erp(codigo)
+                    if dados_cod:
+                        conj = dados_cod[0][6]
+                        tem_desenho = dados_cod[0][7]
+
+                        if conj == 10 or tem_desenho:
+                            print("TOMA TOMA                         TOMA ")
+                            print("SEM IDW!!!")
+                            dados = (3, id_arquivo, "")
+                            self.insert_divergencia(dados)
 
         except Exception as e:
             trata_excecao(e)
@@ -521,7 +546,7 @@ class WorkerFilaConferencia:
             tipo = cursor.fetchone()[0]
 
             if tipo == "IAM":
-                self.consulta_idw_colocar_na_fila(cursor, id_arquivo, caminho)
+                self.consulta_idw_colocar_na_fila(cursor, id_arquivo, caminho, props.get("Cost Center"))
 
                 dados = {
                     "revision_number": props.get("Revision Number"),
@@ -554,7 +579,7 @@ class WorkerFilaConferencia:
 
                 return self.processar_iam(cursor, doc, id_arquivo, dados, origem)
             elif tipo == "IPT":
-                self.consulta_idw_colocar_na_fila(cursor, id_arquivo, caminho)
+                self.consulta_idw_colocar_na_fila(cursor, id_arquivo, caminho, props.get("Cost Center"))
 
                 if props.get("Comprimento"):
                     compr_final = props.get("Comprimento")

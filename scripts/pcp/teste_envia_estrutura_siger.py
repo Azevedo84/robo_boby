@@ -42,39 +42,28 @@ def buscar_filhos(cursor, codigo_pai, visitados, resultado):
 def processar_estoque_excel():
     cursor = conecta.cursor()
 
-    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-    caminho_excel = os.path.join(desktop, "Estoque Final 31-03-2026.xlsx")
-
-    wb = load_workbook(caminho_excel)
-    ws = wb.active
-
     resultado = []
     visitados = set()
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        codigo = str(row[0]).strip()
+    codigo = "21104"
 
-        cursor.execute("""
-            SELECT id, codigo, descricao, unidade, conjunto
-            FROM produto
-            WHERE codigo = ?
-        """, (codigo,))
+    cursor.execute("""
+        SELECT id, codigo, descricao, unidade, conjunto
+        FROM produto
+        WHERE codigo = ?
+    """, (codigo,))
 
-        prod = cursor.fetchone()
+    prod = cursor.fetchone()
 
-        if not prod:
-            print(f"❌ Não encontrado: {codigo}")
-            continue
+    id_prod, cod, desc, um, conjunto = prod
 
-        id_prod, cod, desc, um, conjunto = prod
+    # 🔥 SE FOR CONJUNTO → explode estrutura
+    if conjunto == 10:
+        print(f"🔁 Conjunto: {codigo}")
+        buscar_filhos(cursor, codigo, visitados, resultado)
 
-        # 🔥 SE FOR CONJUNTO → explode estrutura
-        if conjunto == 10:
-            print(f"🔁 Conjunto: {codigo}")
-            buscar_filhos(cursor, codigo, visitados, resultado)
-
-        else:
-            print(f"⏭ Ignorado (não é conjunto): {codigo}")
+    else:
+        print(f"⏭ Ignorado (não é conjunto): {codigo}")
 
     # remove duplicados
     resultado = list(dict.fromkeys(resultado))

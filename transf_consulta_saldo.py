@@ -6,7 +6,7 @@ import pandas as pd
 # CONFIGURAÇÃO
 # ============================================================
 
-ARQUIVO_EXCEL = r"C:\Users\Anderson\Desktop\Cópia de Saldo Almox MAQ.xlsx"
+ARQUIVO_EXCEL = r"C:\Users\Anderson\Desktop\Saldo_Almox.xlsx"
 
 
 # ============================================================

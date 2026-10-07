@@ -95,6 +95,34 @@ class GerarFilaValidacaoERP:
         except Exception as e:
             print(e)
 
+    def enviar_email_sem_arquivo(self, desenho):
+        try:
+            saudacao, msg_final, email_user, password = dados_email()
+
+            subject = f'ENGENHARIA - ARQUIVO NÃO EXISTE OU DUPLICADO {desenho}'
+
+            msg = MIMEMultipart()
+            msg['From'] = email_user
+            msg['Subject'] = subject
+
+            body = f"{saudacao}\n\nO desenho {desenho} não existe ou está duplicado!\n\n"
+            body += f"\n{msg_final}"
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            text = msg.as_string()
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(email_user, password)
+
+            server.sendmail(email_user, self.destinatario, text)
+            server.quit()
+
+            print("email enviado sem arquivo")
+
+        except Exception as e:
+            print(e)
+
     def enviar_email_cadastra_propriedade(self, caminho, desenho, dados):
         try:
             saudacao, msg_final, email_user, password = dados_email()
@@ -329,7 +357,6 @@ class GerarFilaValidacaoERP:
                     WHERE ID_PAI = ?
                 """, (atual,))
                 filhos = [r[0] for r in cursor.fetchall()]
-                print(atual, filhos)
                 fila.extend(filhos)
 
             return itens
@@ -392,7 +419,7 @@ class GerarFilaValidacaoERP:
                         })
 
             cursor = conecta_engenharia.cursor()
-            cursor.execute(f"SELECT proj.id, proj.id_arquivo, arq.nome_base "
+            cursor.execute(f"SELECT proj.id, proj.id_arquivo, proj.NUM_DESENHO, arq.nome_base "
                            f"FROM PROJETO as proj "
                            f"LEFT JOIN ARQUIVOS as arq ON proj.ID_ARQUIVO = arq.id "
                            f"where proj.status = 'A';")
@@ -401,7 +428,7 @@ class GerarFilaValidacaoERP:
 
             if dados_projetos:
                 for i in dados_projetos:
-                    id_projeto, id_arquivo_p, nome_base_p = i
+                    id_projeto, id_arquivo_p, proj_desenho, nome_base_p = i
 
                     if id_arquivo_p:
                         ids = self.buscar_toda_estrutura(cursor_eng, id_arquivo_p)
@@ -419,6 +446,28 @@ class GerarFilaValidacaoERP:
                                     "id": id_item,
                                     "id_origem": id_origem
                                 })
+                    else:
+                        cursor_eng.execute("""
+                                            SELECT ID, TIPO_ARQUIVO
+                                            FROM ARQUIVOS
+                                            WHERE NOME_BASE = ?
+                                              AND TIPO_ARQUIVO IN ('IPT', 'IAM')
+                                        """, (proj_desenho,))
+
+                        resultados = cursor_eng.fetchall()
+
+                        if not resultados or len(resultados) > 1:
+                            self.enviar_email_sem_arquivo(proj_desenho)
+                        else:
+                            id_arquivo, tipo = resultados[0]
+                            cur = conecta_engenharia.cursor()
+                            cur.execute("""
+                                            UPDATE PROJETO
+                                            SET ID_ARQUIVO = ?
+                                            WHERE ID = ?
+                                        """, (id_arquivo, id_projeto))
+
+                            conecta_engenharia.commit()
 
             if lista_itens:
                 lista = self.montar_lista(lista_itens)
@@ -862,9 +911,10 @@ class GerarFilaValidacaoERP:
                                             self.insert_divergencia(dados)
                                             continue
                                     else:
-                                        print("- IAM SEM ESTRUTURA")
+                                        dados = (18, id_arquivo, "IAM SEM ESTRUTURA", id_origem)
+                                        self.insert_divergencia(dados)
                                         continue
-                                if tipo_arquivo == "IPT" and classificacao == "NOSSO":
+                                elif tipo_arquivo == "IPT" and classificacao == "NOSSO":
                                     if ncm:
                                         if len(descricao) > 30:
                                             dados = (23, id_arquivo, f"Descrição: {descricao}", id_origem)
@@ -880,6 +930,23 @@ class GerarFilaValidacaoERP:
                                         dados = (2, id_arquivo, "IPT, NOSSO, SEM CÓDIGO", id_origem)
                                         self.insert_divergencia(dados)
                                         continue
+                                else:
+                                    if ncm:
+                                        if len(descricao) > 30:
+                                            dados = (23, id_arquivo, f"Descrição: {descricao}", id_origem)
+                                            self.insert_divergencia(dados)
+                                            continue
+                                        if len(ref) > 20:
+                                            dados = (23, id_arquivo, f"Referência: {ref}", id_origem)
+                                            self.insert_divergencia(dados)
+                                            continue
+                                        self.insert_pre_cadastro(id_arquivo, descricao, ref, id_origem)
+                                        continue
+                                    else:
+                                        dados = (2, id_arquivo, "IPT, TERCEIROS, SEM CÓDIGO", id_origem)
+                                        self.insert_divergencia(dados)
+                                        continue
+
                             elif len(dados_ref) > 1:
                                 print("- DESENHO ENCONTRADO EM MAIS PRODUTOS:", dados_ref)
                                 continue
@@ -1056,8 +1123,8 @@ class GerarFilaValidacaoERP:
                         elif not obs:
                             dados = (29, id_arq, f"Projeto: {id_proj} - Falta definir o campo Observação para criar PI", id_arq)
                             self.insert_divergencia(dados)
-                        elif not data_entrega or data_entrega <= hoje:
-                            dados = (29, id_arq, f"Projeto: {id_proj} - Data de entrega menor do que a data atual para criar PI", id_arq)
+                        elif not data_entrega:
+                            dados = (29, id_arq, f"Projeto: {id_proj} - Falta definir o campo Data de entrega para criar PI", id_arq)
                             self.insert_divergencia(dados)
                         else:
                             cursor = conecta.cursor()
@@ -1338,7 +1405,7 @@ class GerarFilaValidacaoERP:
                         qtde_calc = self.calcular_qtde_erp(codigo_f, qtde_f, compr_ipt_f_float, id_arquivo_f)
 
                         if qtde_calc is None:
-                            print("IAM Erro ao calcular quantidade: codigo_f:", codigo_f)
+                            print("IAM Erro ao calcular quantidade: codigo_f:", codigo_f, codigo, id_arquivo)
                             erro_estrutura = True
                             break
 
@@ -1742,6 +1809,8 @@ class GerarFilaValidacaoERP:
                             self.insert_divergencia(dados)
 
                 else:
+                    print("TOMA TOMA                         TOMA ")
+                    print("SEM IDW!!!")
                     dados = (3, id_arquivo, "", id_origem)
                     self.insert_divergencia(dados)
 

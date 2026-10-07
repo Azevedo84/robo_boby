@@ -457,6 +457,17 @@ class ManipularEmailOC:
             # ----------------------------------
             estrategias = [
                 (
+                    "codigo_com_prefixo_1009",
+                    150,
+                    r'\b1009(\d{3,6})\b'
+                ),
+                (
+                    "codigo_apos_ca",
+                    150,
+                    r'\bCA\s+\d*(\d{4,6})\b'
+                ),
+
+                (
                     "codigo_grande_ean",
                     200,
                     r'\b\d{10,14}\b'
@@ -713,6 +724,12 @@ class ManipularEmailOC:
                 print("ITEM NORMALIZADO:")
                 print(item_txt)
 
+                print(">>> TESTE REQUISIÇÃO:")
+                for req in requisicoes:
+                    codigo = req["codigo"]
+                    if re.search(rf'\b{codigo}\b', item_txt):
+                        print("CÓDIGO DE REQUISIÇÃO ENCONTRADO:", codigo)
+
                 dados_match = re.search(
                     r'''
                     ([\d.,]+)\s+       
@@ -758,7 +775,8 @@ class ManipularEmailOC:
                 print("codigo encontrado:", codigo_produto)
 
                 if not codigo_produto:
-                    print("❌ Produto não encontrado")
+                    print(f"❌ PRODUTO NÃO ENCONTRADO | VALOR DO ITEM: {vl_total}")
+                    print(f"   ITEM: {item_txt}")
                     continue
 
                 itens.append({

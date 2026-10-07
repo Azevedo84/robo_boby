@@ -187,8 +187,6 @@ class ExecutaPlanoPcp:
                 for i in ops_abertas:
                     num_op, cod, id_estrut, descr, ref, um, tipo, qtde = i
 
-                    print("agrupando ops abertas: ", i)
-
                     material_faltando = self.verifica_ops_concluidas(num_op, id_estrut)
 
                     if material_faltando:
@@ -285,6 +283,7 @@ class ExecutaPlanoPcp:
     def processar_arquivos_inventor(self, obs, cod):
         try:
             ref = self.tratar_referencia(obs)
+            print("ENTRE NO PROCESSAR INVENTOR", cod, ref)
 
             if ref:
                 cursor_eng = conecta_engenharia.cursor()
@@ -302,6 +301,8 @@ class ExecutaPlanoPcp:
                     self.inserir_fila_conferencia(id_arquivo)
                 else:
                     self.envia_email_nao_acha_desenho(obs, cod)
+            else:
+                self.envia_email_nao_acha_desenho(obs, cod)
 
         except Exception as e:
             trata_excecao(e)
@@ -345,8 +346,6 @@ class ExecutaPlanoPcp:
                     qtde_nec_f = 0
 
                     cod, descr, ref, um, qtde_pi = i
-
-                    print("pelas pis abertos: ", cod, descr, ref, um, qtde_pi)
 
                     qtde_pi_float = valores_para_float(qtde_pi)
 
@@ -430,7 +429,6 @@ class ExecutaPlanoPcp:
 
     def inicio_de_tudo_ops_abertas(self):
         try:
-            print("entrei nas ops abertas")
             lista_final = []
 
             dados_ops_abertas = self.ops_abertas()
@@ -442,8 +440,6 @@ class ExecutaPlanoPcp:
                     qtde_nec_f = 0
 
                     cod, descr, ref, um, qtde_pi = i
-
-                    print("pelas ops abertas: ", cod, descr, ref, um, qtde_pi)
 
                     cursor = conecta.cursor()
                     cursor.execute(f"SELECT prod.conjunto, prod.tipomaterial, tip.tipomaterial, conj.conjunto, "
@@ -523,7 +519,6 @@ class ExecutaPlanoPcp:
 
     def executar_tarefa(self, dados_produtos):
         try:
-            print("executar tarefa")
             # --- Agrupamento e soma de quantidades ---
             produtos_unicos = defaultdict(lambda: list())
 
@@ -540,8 +535,6 @@ class ExecutaPlanoPcp:
             if tem_conjunto_10:
                 for i in produtos_unicos.values():
                     cod, descr, ref, um, conjunto, num_tipo, tipo, qtde = i
-
-                    print("executar tarefa acabados: ", i)
 
                     qtde = round(qtde, 3)
 
@@ -565,14 +558,10 @@ class ExecutaPlanoPcp:
                                 else:
                                     self.cria_pdf_envia_email_usinagem(num_op, ref, qtde, emissao_br)
             else:
-                print("Nenhum item com conjunto == 10")
-
                 agrupado = defaultdict(list)
 
                 for i in produtos_unicos.values():
                     cod, descr, ref, um, conjunto, num_tipo, tipo, qtde = i
-
-                    print("executar tarefa comprados: ", i)
 
                     qtde = round(qtde, 3)
 
@@ -1229,15 +1218,7 @@ class ExecutaPlanoPcp:
 
     def inserir_banco_orcamento(self, num_tipo, dados_itens):
         try:
-            cursor = conecta_robo.cursor()
-            cursor.execute("select GEN_ID(GEN_ENVIA_ORCAMENTO_ID,0) from rdb$database;")
-            ultimo_req0 = cursor.fetchall()
-            ultimo_req1 = ultimo_req0[0]
-            ultimo_req = int(ultimo_req1[0]) + 1
-
-            cursor = conecta_robo.cursor()
-            cursor.execute(f"Insert into ENVIA_ORCAMENTO (ID, ID_TIPO) "
-                           f"values (GEN_ID(GEN_ENVIA_ORCAMENTO_ID,1), {num_tipo});")
+            tem_problemas = 0
 
             for i in dados_itens:
                 cod, descr, ref, um, conjunto, num_tipo, tipo, qtde, ops_dest, vnd_dest = i
@@ -1258,19 +1239,52 @@ class ExecutaPlanoPcp:
                         else:
                             msg_pis += f"- {num_pi}"
 
-                cur = conecta.cursor()
-                cur.execute(f"SELECT id, descricao, COALESCE(obs, '') as obs, unidade, id_versao "
-                            f"FROM produto where codigo = {cod};")
-                detalhes_produto = cur.fetchall()
-                id_prod, descricao_id, referencia_id, unidade_id, id_versao = detalhes_produto[0]
+                if not msg_ops and not msg_pis:
+                    tem_problemas =+ 1
+
+            if not tem_problemas:
+                cursor = conecta_robo.cursor()
+                cursor.execute("select GEN_ID(GEN_ENVIA_ORCAMENTO_ID,0) from rdb$database;")
+                ultimo_req0 = cursor.fetchall()
+                ultimo_req1 = ultimo_req0[0]
+                ultimo_req = int(ultimo_req1[0]) + 1
 
                 cursor = conecta_robo.cursor()
-                cursor.execute(f"Insert into PRODUTO_ORCAMENTO (ID, ID_ORCAMENTO, ID_PRODUTO, QTDE, NUM_OPS, NUM_PIS) "
-                               f"values (GEN_ID(GEN_PRODUTO_ORCAMENTO_ID,1), {ultimo_req}, {id_prod}, "
-                               f"'{qtde}', '{msg_ops}', '{msg_pis}');")
+                cursor.execute(f"Insert into ENVIA_ORCAMENTO (ID, ID_TIPO) "
+                               f"values (GEN_ID(GEN_ENVIA_ORCAMENTO_ID,1), {num_tipo});")
 
-            conecta_robo.commit()
-            print(f"Nº Orçemento {ultimo_req} inserido no banco com sucesso!")
+                for i in dados_itens:
+                    cod, descr, ref, um, conjunto, num_tipo, tipo, qtde, ops_dest, vnd_dest = i
+
+                    msg_ops = ""
+                    if ops_dest:
+                        for i in ops_dest:
+                            num_op, cod_op, descr_op = i
+                            msg_ops += f"- {num_op}"
+
+                    msg_pis = ""
+                    if vnd_dest:
+                        for ii in vnd_dest:
+                            num_pi, num_ov, cliente = ii
+
+                            if num_ov:
+                                msg_pis += f"- {num_ov}"
+                            else:
+                                msg_pis += f"- {num_pi}"
+
+                    cur = conecta.cursor()
+                    cur.execute(f"SELECT id, descricao, COALESCE(obs, '') as obs, unidade, id_versao "
+                                f"FROM produto where codigo = {cod};")
+                    detalhes_produto = cur.fetchall()
+                    id_prod, descricao_id, referencia_id, unidade_id, id_versao = detalhes_produto[0]
+
+                    cursor = conecta_robo.cursor()
+                    cursor.execute(f"Insert into PRODUTO_ORCAMENTO (ID, ID_ORCAMENTO, ID_PRODUTO, QTDE, NUM_OPS, NUM_PIS) "
+                                   f"values (GEN_ID(GEN_PRODUTO_ORCAMENTO_ID,1), {ultimo_req}, {id_prod}, "
+                                   f"'{qtde}', '{msg_ops}', '{msg_pis}');")
+
+                conecta_robo.commit()
+                print(f"Nº Orçemento {ultimo_req} inserido no banco com sucesso!")
 
         except Exception as e:
             trata_excecao(e)
@@ -1527,7 +1541,11 @@ class ExecutaPlanoPcp:
             arquivo_pdf_final = f'OP {num_op} - {arquivo_pdf}.pdf'
             caminho_completo = os.path.join(diretorio_destino, arquivo_pdf_final)
 
-            self.converte_png_para_pdf(arquivo_imagem, caminho_completo)
+            self.converte_png_para_pdf(
+                arquivo_imagem,
+                caminho_completo,
+                caminho_original
+            )
 
             self.excluir_arquivo(arquivo_imagem)
 
@@ -1554,11 +1572,58 @@ class ExecutaPlanoPcp:
             font1 = ImageFont.truetype("tahoma.ttf", 70)
 
             def criar_texto(pos_horizontal, pos_vertical, texto, cor, fonte, largura_tra):
-                draw.text((pos_horizontal, pos_vertical), texto, fill=cor, font=fonte, stroke_width=largura_tra)
+                draw.text(
+                    (pos_horizontal, pos_vertical),
+                    texto,
+                    fill=cor,
+                    font=fonte,
+                    stroke_width=largura_tra
+                )
 
-            criar_texto(4500, 2900, num_op_str, (0, 0, 0), font, 4)
-            criar_texto(5160, 2900, qtde_ordem, (0, 0, 0), font, 4)
-            criar_texto(5000, 3150, data_emissao, (0, 0, 0), font1, 0)
+            # A imagem é renderizada a 500 DPI.
+            # A folha original tem 5500 x 4250 pixels (11 x 8,5").
+            # As posições antigas colocavam a quantidade/data para fora
+            # da folha quando o texto ficava mais comprido.
+            #
+            # Montamos OP + quantidade como um único bloco e garantimos
+            # que o bloco inteiro fique dentro da largura da folha.
+            margem_direita = 100
+            espaco = 50
+
+            largura_op = draw.textbbox(
+                (0, 0), num_op_str, font=font, stroke_width=4
+            )[2]
+
+            largura_qtde = draw.textbbox(
+                (0, 0), qtde_ordem, font=font, stroke_width=4
+            )[2]
+
+            largura_bloco = largura_op + espaco + largura_qtde
+
+            x_bloco = 4200
+            x_bloco = min(
+                x_bloco,
+                imgs.width - margem_direita - largura_bloco
+            )
+            x_bloco = max(0, x_bloco)
+
+            x_op = x_bloco
+            x_qtde = x_op + largura_op + espaco
+
+            criar_texto(x_op, 2900, num_op_str, (0, 0, 0), font, 4)
+            criar_texto(x_qtde, 2900, qtde_ordem, (0, 0, 0), font, 4)
+
+            largura_data = draw.textbbox(
+                (0, 0), data_emissao, font=font1
+            )[2]
+
+            x_data = min(
+                4700,
+                imgs.width - margem_direita - largura_data
+            )
+            x_data = max(0, x_data)
+
+            criar_texto(x_data, 3150, data_emissao, (0, 0, 0), font1, 0)
 
             arquivo_final = f"{num_desenho_arq}.png"
             imgs.save(arquivo_final)
@@ -1585,7 +1650,11 @@ class ExecutaPlanoPcp:
             arquivo_pdf_final = f'OP {num_op} - {arquivo_pdf}.pdf'
             caminho_completo = os.path.join(diretorio_destino, arquivo_pdf_final)
 
-            self.converte_png_para_pdf(arquivo_imagem, caminho_completo)
+            self.converte_png_para_pdf(
+                arquivo_imagem,
+                caminho_completo,
+                caminho_original
+            )
             self.excluir_arquivo(arquivo_imagem)
 
         except Exception as e:
@@ -1611,11 +1680,58 @@ class ExecutaPlanoPcp:
             font1 = ImageFont.truetype("tahoma.ttf", 70)
 
             def criar_texto(pos_horizontal, pos_vertical, texto, cor, fonte, largura_tra):
-                draw.text((pos_horizontal, pos_vertical), texto, fill=cor, font=fonte, stroke_width=largura_tra)
+                draw.text(
+                    (pos_horizontal, pos_vertical),
+                    texto,
+                    fill=cor,
+                    font=fonte,
+                    stroke_width=largura_tra
+                )
 
-            criar_texto(4500, 2830, num_op_str, (0, 0, 0), font, 4)
-            criar_texto(5160, 2830, qtde_ordem, (0, 0, 0), font, 4)
-            criar_texto(5000, 3080, data_emissao, (0, 0, 0), font1, 0)
+            # A imagem é renderizada a 500 DPI.
+            # A folha original tem 5500 x 4250 pixels (11 x 8,5").
+            # As posições antigas colocavam a quantidade/data para fora
+            # da folha quando o texto ficava mais comprido.
+            #
+            # Montamos OP + quantidade como um único bloco e garantimos
+            # que o bloco inteiro fique dentro da largura da folha.
+            margem_direita = 100
+            espaco = 50
+
+            largura_op = draw.textbbox(
+                (0, 0), num_op_str, font=font, stroke_width=4
+            )[2]
+
+            largura_qtde = draw.textbbox(
+                (0, 0), qtde_ordem, font=font, stroke_width=4
+            )[2]
+
+            largura_bloco = largura_op + espaco + largura_qtde
+
+            x_bloco = 4200
+            x_bloco = min(
+                x_bloco,
+                imgs.width - margem_direita - largura_bloco
+            )
+            x_bloco = max(0, x_bloco)
+
+            x_op = x_bloco
+            x_qtde = x_op + largura_op + espaco
+
+            criar_texto(x_op, 2830, num_op_str, (0, 0, 0), font, 4)
+            criar_texto(x_qtde, 2830, qtde_ordem, (0, 0, 0), font, 4)
+
+            largura_data = draw.textbbox(
+                (0, 0), data_emissao, font=font1
+            )[2]
+
+            x_data = min(
+                4700,
+                imgs.width - margem_direita - largura_data
+            )
+            x_data = max(0, x_data)
+
+            criar_texto(x_data, 3080, data_emissao, (0, 0, 0), font1, 0)
 
             arquivo_final = f"{num_desenho_arq}.png"
             imgs.save(arquivo_final)
@@ -1628,20 +1744,38 @@ class ExecutaPlanoPcp:
             trata_excecao(e)
             raise
 
-    def converte_png_para_pdf(self, input_png, output_pdf):
+    def converte_png_para_pdf(self, input_png, output_pdf, caminho_original):
         try:
-            c = canvas.Canvas(output_pdf, pagesize=landscape(A4))
+            import fitz
+
+            # Descobre o tamanho EXATO da folha original
+            doc = fitz.open(caminho_original)
+            pagina = doc[0]
+
+            largura = pagina.rect.width
+            altura = pagina.rect.height
+
+            doc.close()
+
+            print(f"TAMANHO ORIGINAL: {largura} x {altura}")
+
+            # Cria o PDF com exatamente o mesmo tamanho
+            c = canvas.Canvas(
+                output_pdf,
+                pagesize=(largura, altura)
+            )
+
             img = ImageReader(input_png)
-            width, height = img.getSize()
 
-            aspect_ratio = width / height
-            target_width = 800
-            target_height = target_width / aspect_ratio
+            # Coloca a imagem ocupando exatamente a folha
+            c.drawImage(
+                img,
+                0,
+                0,
+                width=largura,
+                height=altura
+            )
 
-            x = (A4[1] - target_width) / 2
-            y = (A4[0] - target_height) / 2
-
-            c.drawImage(img, x, y, width=target_width, height=target_height)
             c.showPage()
             c.save()
 

@@ -3,7 +3,7 @@ import pandas as pd
 import pdfplumber
 import re
 
-arquivo = r"C:\Users\Anderson\Desktop\pacifil.xlsx"
+arquivo = r"C:\Users\Anderson\Desktop\pendencias\pacifil.xlsx"
 pdf = r"C:\Users\Anderson\Desktop\pendencias\MAQ_06.2026_LOCAL 1 - PROPRIO.pdf"
 
 valores_pdf = {}
@@ -56,7 +56,15 @@ with pdfplumber.open(pdf) as arq:
                 # Se não conseguiu, guarda o código para procurar o valor na próxima linha
                 codigo_pendente = codigo
 
-df = pd.read_excel(arquivo)
+df = pd.read_excel(arquivo, header=None)
+
+print("==================================")
+print("Quantidade de linhas:", len(df))
+
+codigos = df.iloc[:, 0].dropna().astype(int)
+
+print("\nCÓDIGOS DUPLICADOS:")
+print(codigos[codigos.duplicated(keep=False)].tolist())
 
 resultado = []
 
@@ -103,7 +111,7 @@ for codigo in df.iloc[:, 0].dropna().astype(int):
             if local.upper() == "ALMOX":
                 saldo_almox += saldo
 
-        if saldo_total > 0:
+        if saldo_almox > 0:
             resultado.append({
                 "CODIGO": cod,
                 "DESCRICAO": descri,
@@ -119,6 +127,21 @@ for codigo in df.iloc[:, 0].dropna().astype(int):
 
     else:
         print(f"==== Código não existe!")
+
+# Verifica quais códigos do Excel não foram para o resultado
+codigos_excel = set(df.iloc[:, 0].dropna().astype(int))
+codigos_resultado = set(int(x["CODIGO"]) for x in resultado)
+
+codigos_perdidos = codigos_excel - codigos_resultado
+
+print("\n====================================")
+print(f"Códigos no Excel: {len(codigos_excel)}")
+print(f"Códigos no resultado: {len(codigos_resultado)}")
+print(f"Códigos perdidos: {len(codigos_perdidos)}")
+print("====================================")
+
+for codigo in sorted(codigos_perdidos):
+    print("PERDIDO:", codigo)
 
 df_saida = pd.DataFrame(resultado)
 arquivo_saida = r"C:\Users\Anderson\Desktop\Saldo_Almox.xlsx"

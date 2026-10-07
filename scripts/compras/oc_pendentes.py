@@ -376,6 +376,8 @@ class EnviaOrdensCompraPendentes:
                                 """, (num_orc,))
                 dados_oc = cursor_oc.fetchall()
 
+                manda_email = 0
+
                 if dados_oc:
                     for ii in dados_oc:
                         id_prod_oc, qtde_prod_oc = ii
@@ -408,7 +410,10 @@ class EnviaOrdensCompraPendentes:
                                     print(f"NF {num_nf} atrasada ({dias} dias)")
                                     self.envia_email_nf_atrasada(num_nf, data_emissao_nf, fornecedor, dias)
                         else:
-                            self.envia_email(num_orc, data_entr, forne, bc_ander)
+                            manda_email += 1
+
+                if manda_email:
+                    self.envia_email(num_orc, data_entr, forne, bc_ander)
 
         except Exception as e:
             trata_excecao(e)

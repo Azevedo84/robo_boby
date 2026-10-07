@@ -548,11 +548,11 @@ if __name__ == "__main__":
         rel = RelatorioOCPendentes()
 
         if rel.pode_enviar_oc_fim_mes():
+
             arquivo = "Relatorio_OC_Pendentes.pdf"
 
             rel.gerar_pdf(arquivo)
             rel.enviar_email(arquivo)
-
         else:
             print("Hoje não é o último dia útil do mês ou o relatório já foi enviado.")
 
